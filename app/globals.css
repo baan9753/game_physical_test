@@ -1,0 +1,1738 @@
+/* ==========================================================================
+   게이머 피지컬 테스트 전역 스타일
+   - 접두사 gp- 는 "game physical" 의 약자로, 게임 화면 전용 클래스입니다.
+   - 레트로 픽셀 느낌: 각진 모서리(border-radius 0), 두꺼운 테두리, 오프셋 그림자를 사용합니다.
+   - 뒤쪽 섹션이 앞쪽 규칙을 덮어쓰는 구조라, 같은 선택자가 여러 번 나오면 "아래쪽이 최종 값"입니다.
+   ========================================================================== */
+
+/* 폰트: 영문 픽셀 폰트(Press Start 2P)와 한글 본문 폰트(Noto Sans KR) */
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
+@import url('https://cdn.jsdelivr.net/npm/galmuri@latest/dist/galmuri.css');
+
+/* ---------- 문서 기본값 ---------- */
+:root {
+  color-scheme: dark; /* 스크롤바·폼 요소 등 브라우저 기본 UI도 다크 테마로 */
+  background: #10140f;
+  color: #f1edd5;
+  font-family:
+    'Noto Sans KR',
+    Pretendard,
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
+* {
+  box-sizing: border-box;
+}
+/* 게임이 한 화면에 꽉 차도록 문서 스크롤을 막습니다. (넘치는 내용은 GameView의 zoom으로 축소) */
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+body {
+  margin: 0;
+  min-height: 100svh; /* svh: 모바일 주소창을 제외한 안전한 뷰포트 높이 */
+  background: #10140f;
+}
+.service-main {
+  min-height: 100svh;
+}
+
+/* ---------- 앱 루트: 색상 변수와 배경 ---------- */
+.gp-app {
+  /* 디자인 토큰: 폰트와 팔레트를 변수로 모아 두어 다른 규칙에서 재사용합니다. */
+  --gp-pixel: 'Press Start 2P', monospace;
+  --gp-korean: 'Noto Sans KR', system-ui, -apple-system, sans-serif;
+  --gp-bg: #10140f; /* 가장 어두운 배경 */
+  --gp-panel: #1b2118; /* 패널 배경 */
+  --gp-line: #59634b; /* 경계선 */
+  --gp-paper: #f1edd5; /* 기본 글자색 */
+  --gp-muted: #b4b9a0; /* 보조 글자색 */
+  --gp-lime: #c8f36a; /* 제목/강조 */
+  --gp-gold: #ffd35b; /* 점수/버튼 강조 */
+  --gp-blue: #82c9ff;
+  --gp-green: #7ce0a1;
+  width: 100%;
+  height: 100svh;
+  min-height: 0;
+  overflow: hidden;
+  padding: 18px max(24px, calc((100% - 1072px) / 2)) 22px; /* 큰 화면에서는 가운데 정렬 효과 */
+  background-color: var(--gp-bg);
+  /* 8px 격자 무늬 두 겹 + 위쪽 은은한 빛 번짐 */
+  background-image:
+    linear-gradient(#23301e22 1px, transparent 1px),
+    linear-gradient(90deg, #23301e22 1px, transparent 1px),
+    radial-gradient(ellipse at 50% 0, #34402a 0, transparent 56%);
+  background-size:
+    8px 8px,
+    8px 8px,
+    auto;
+  color: var(--gp-paper);
+  font-family:
+    'Noto Sans KR',
+    Pretendard,
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
+/* 버튼/입력창이 브라우저 기본 폰트 대신 앱 폰트를 쓰도록 상속 */
+.gp-app button,
+.gp-app input {
+  font-family: inherit;
+}
+.gp-app h1,
+.gp-app h2,
+.gp-app h3,
+.gp-app p {
+  margin-top: 0;
+}
+
+/* ---------- 게임기 프레임과 화면 ---------- */
+/* 바깥 프레임: 겹 테두리와 그림자로 오래된 게임기 외관을 표현 */
+.gp-frame {
+  position: relative;
+  padding: 8px;
+  border: 4px solid #746747;
+  background: #29291f;
+  box-shadow:
+    0 0 0 4px #090b08,
+    0 8px 0 #080907,
+    0 22px 50px #0008;
+}
+/* 실제 내용이 표시되는 화면 영역 */
+.gp-screen {
+  position: relative;
+  min-height: 540px;
+  overflow: hidden;
+  border: 2px solid #080c08;
+  background: #182117;
+}
+/* CRT 모니터 같은 가로 줄무늬(스캔라인) 효과. 클릭은 통과시킵니다. */
+.gp-screen::before {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.1;
+  background: repeating-linear-gradient(0deg, transparent 0 3px, #b8d489 3px 4px);
+  content: '';
+}
+/* 스캔라인 위로 실제 내용이 올라오도록 z-index 지정 */
+.gp-screen > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* ---------- 상단 바 / HUD ---------- */
+.gp-topbar {
+  display: flex;
+  min-height: 55px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 3px solid #65764b;
+  background: #20291c;
+}
+.gp-topbar h1,
+.gp-topbar h2,
+.gp-hud strong {
+  margin: 0;
+  color: var(--gp-lime);
+  font-size: 13px;
+  font-weight: 900;
+}
+.gp-hud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+  font-size: 12px;
+  font-weight: 800;
+}
+.gp-hud b {
+  color: var(--gp-gold);
+}
+
+/* ---------- 게임 캔버스 영역 ---------- */
+.gp-arena {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9; /* 캔버스(800x450)와 같은 비율 유지 */
+  overflow: hidden;
+  background: #1c271a;
+}
+.gp-arena canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: auto; /* 캔버스 안 한글 텍스트가 깨지지 않게 표시 */
+  touch-action: none; /* 캔버스 위 터치가 스크롤/확대로 바뀌지 않게 */
+}
+
+/* ---------- 안내 문구 줄과 조작 버튼 줄 ---------- */
+.gp-instruction {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 15px;
+  border-top: 3px solid #65764b;
+  background: #1b2118;
+  color: #d4d8bd;
+  font-size: 12px;
+}
+.gp-instruction strong,
+.gp-instruction b {
+  color: var(--gp-gold);
+}
+.gp-actions,
+.gp-mobile-controls {
+  display: flex;
+  min-height: 64px;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 9px;
+  padding: 12px;
+  border-top: 1px solid #45523b;
+  background: #161c14;
+}
+
+/* ---------- 버튼 ---------- */
+.gp-btn {
+  min-height: 44px; /* 터치하기 쉬운 최소 높이 */
+  padding: 10px 17px;
+  border: 2px solid #879a63;
+  border-radius: 0;
+  background: #3a4a30;
+  box-shadow: 4px 4px 0 #080b08; /* 번짐 없는 단단한 그림자 = 픽셀 느낌 */
+  color: var(--gp-paper);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+  cursor: pointer;
+  touch-action: manipulation; /* 더블탭 확대 지연 방지 */
+}
+.gp-btn:hover:not(:disabled),
+.gp-btn:focus-visible {
+  border-color: var(--gp-lime);
+  outline: 2px solid transparent;
+  background: #53653d;
+  color: #fff;
+}
+/* 키보드 포커스 표시는 금색 외곽선으로 눈에 띄게 */
+.gp-btn:focus-visible {
+  outline: 2px solid var(--gp-gold);
+  outline-offset: 3px;
+}
+.gp-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+/* 주요 동작(시작/다음 등) 버튼: 금색 */
+.gp-btn.gp-primary,
+.gp-btn--primary {
+  border-color: #fff0a6;
+  background: var(--gp-gold);
+  color: #292414;
+  font-weight: 900;
+}
+.gp-btn.gp-primary:hover:not(:disabled),
+.gp-btn--primary:hover:not(:disabled) {
+  background: #ffe58d;
+  color: #292414;
+}
+/* 위험 동작 버튼: 붉은 계열 */
+.gp-btn.gp-danger,
+.gp-btn--danger {
+  border-color: #a9574a;
+  background: #512d29;
+}
+
+/* ---------- 홈/안내/결과 공통 카드 레이아웃 ---------- */
+.gp-home {
+  display: flex;
+  min-height: 540px;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 24px;
+  background:
+    linear-gradient(#11180edb, #11180eed),
+    repeating-linear-gradient(90deg, #24311c 0 40px, #1b2718 40px 80px); /* 세로 줄무늬 바닥 */
+  text-align: center;
+}
+.gp-card {
+  width: min(760px, 100%);
+  padding: 26px 24px;
+  border: 3px solid #718256;
+  background: #20291d;
+  box-shadow:
+    7px 7px 0 #080b08,
+    inset 0 0 0 4px #151d14;
+}
+.gp-card h1 {
+  margin: 4px 0 14px;
+  color: var(--gp-lime);
+  font-size: clamp(25px, 4vw, 40px); /* 화면 폭에 따라 부드럽게 크기 조절 */
+  font-weight: 900;
+  line-height: 1.4;
+  text-shadow: 3px 3px #334126;
+  word-break: keep-all; /* 한글을 단어 단위로 줄바꿈 */
+}
+.gp-card h2 {
+  margin: 10px 0 16px;
+  color: var(--gp-lime);
+  font-size: clamp(22px, 3vw, 30px);
+  line-height: 1.4;
+}
+.gp-card p {
+  color: #d5d9c6;
+  line-height: 1.8;
+  word-break: keep-all;
+}
+
+/* 홈 화면의 단계 선택 격자(3열) */
+.gp-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 24px 0;
+}
+.gp-grid > button,
+.gp-grid > .gp-stage {
+  padding: 12px 7px;
+  border: 1px solid #5a684a;
+  background: #192117;
+  color: #c9d0b8;
+  font: inherit;
+  font-size: 16px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.gp-grid > button:hover,
+.gp-grid > button:focus-visible,
+.gp-grid > .gp-stage:hover {
+  outline: 2px solid var(--gp-lime);
+  background: #293724;
+  color: #fff;
+}
+.gp-grid > button b,
+.gp-grid > .gp-stage b {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--gp-gold);
+  font-size: 14px;
+}
+/* 작은 라벨(예: "1단계 · 반응속도") */
+.gp-tag {
+  color: var(--gp-gold);
+  font: 14px var(--gp-pixel);
+  /* letter-spacing: 0.04em; */
+}
+
+/* ---------- 종합 결과: 2열 배치와 점수 목록 ---------- */
+.gp-result-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.3fr;
+  align-items: start;
+  gap: 20px;
+  text-align: left;
+}
+.gp-result-grid strong {
+  color: var(--gp-gold);
+}
+.gp-scores {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 12px 0;
+}
+.gp-scores > * {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 7px 9px;
+  border: 1px solid #43523a;
+  background: #151d14;
+  color: #d5d9c6;
+  font-size: 11px;
+}
+.gp-scores b,
+.gp-scores strong {
+  color: var(--gp-lime);
+}
+
+/* ---------- 오버레이(일시정지/설정 등 화면 위 팝업) ---------- */
+.gp-overlay {
+  position: absolute;
+  z-index: 10;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: #060905dd; /* 반투명 어두운 배경 */
+}
+.gp-overlay .gp-card {
+  width: min(430px, 100%);
+  text-align: center;
+}
+.gp-overlay h2 {
+  color: var(--gp-gold);
+}
+.gp-overlay .gp-actions {
+  background: transparent;
+  border: 0;
+}
+.gp-app footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 15px;
+  color: #8f967f;
+  font-size: 10px;
+}
+
+/* ---------- 모바일(720px 이하) 기본 보정: 여백과 글자 크기 축소 ---------- */
+@media (max-width: 720px) {
+  .gp-app {
+    padding: 10px 8px 14px;
+  }
+  .gp-frame {
+    padding: 4px;
+    border-width: 3px;
+  }
+  .gp-screen {
+    min-height: 0;
+  }
+  .gp-topbar {
+    min-height: 48px;
+    padding: 6px 9px;
+  }
+  .gp-hud {
+    gap: 9px;
+    font-size: 10px;
+  }
+  .gp-instruction {
+    min-height: 43px;
+    padding: 8px;
+    font-size: 10px;
+  }
+  .gp-actions,
+  .gp-mobile-controls {
+    min-height: 55px;
+    padding: 9px;
+  }
+  .gp-btn {
+    min-height: 42px;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+  .gp-home {
+    min-height: 0;
+    padding: 18px 10px;
+  }
+  .gp-card {
+    padding: 18px 12px;
+  }
+  .gp-grid {
+    gap: 5px;
+    margin: 15px 0;
+  }
+  .gp-grid > button,
+  .gp-grid > .gp-stage {
+    padding: 9px 3px;
+    font-size: 10px;
+  }
+  .gp-result-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+/* ---------- 5단계(10초 맞추기) 결과: 측정 막대 ---------- */
+.gp-measures {
+  display: grid;
+  gap: 9px;
+  margin: 16px 0;
+  text-align: left;
+}
+.gp-measure {
+  padding: 9px 10px;
+  background: #151d14;
+  border: 1px solid #46543b;
+}
+.gp-measure-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #d8ddc6;
+  font-size: 11px;
+  margin: 6px 0;
+}
+.gp-measure-meta b {
+  color: #ffd35b;
+}
+/* 0~12초 구간을 색으로 구분한 막대. 한가운데 초록(퍼펙트)이 10초 지점이며,
+   양끝으로 갈수록 붉은색(미스)이 됩니다. */
+.gp-measure-track {
+  position: relative;
+  height: 18px;
+  background: linear-gradient(
+    to right,
+    #a64b45 0 66.6667%,
+    #c87549 66.6667% 70.8333%,
+    #d39d4a 70.8333% 75%,
+    #ddc34c 75% 79.1667%,
+    #9fc957 79.1667% 81.6667%,
+    #72bd64 81.6667% 85%,
+    #9fc957 85% 87.5%,
+    #ddc34c 87.5% 91.6667%,
+    #d39d4a 91.6667% 95.8333%,
+    #c87549 95.8333% 100%
+  );
+  border: 2px solid #0c110b;
+}
+.gp-measure-fill {
+  height: 100%;
+  background: #f5f2d788;
+}
+.gp-measure-target {
+  position: absolute;
+  z-index: 2;
+  top: -5px;
+  left: 83.3333%;
+  width: 4px;
+  height: 30px;
+  background: #ffe477;
+  box-shadow: 0 0 0 1px #292414;
+  transform: translateX(-50%);
+}
+/* 실제 클릭한 시점을 가리키는 밝은 세로선 */
+.gp-measure-marker {
+  position: absolute;
+  z-index: 3;
+  top: -5px;
+  height: 30px;
+  width: 4px;
+  background: #fff4c6;
+  box-shadow: 0 0 0 1px #e66b57;
+  transform: translateX(-50%);
+}
+.gp-measure-track + .gp-measure-meta {
+  position: relative;
+  display: block;
+  min-height: 16px;
+}
+.gp-measure-track + .gp-measure-meta span:first-child {
+  position: absolute;
+  left: 0;
+}
+.gp-measure-track + .gp-measure-meta span:nth-child(2) {
+  position: absolute;
+  left: 83.3333%;
+  color: #ffd35b;
+  transform: translateX(-50%);
+}
+.gp-measure-track + .gp-measure-meta span:last-child {
+  position: absolute;
+  right: 0;
+}
+
+/* ---------- 상단 바 안의 아이콘 버튼(작은 정사각형) ---------- */
+.gp-topbar > .gp-btn {
+  display: inline-flex;
+  width: 40px;
+  min-width: 40px;
+  height: 36px;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 2px solid #819163;
+  background: #333e2b;
+  color: var(--gp-paper);
+  font-size: 20px;
+  box-shadow: 3px 3px 0 #080b08;
+}
+.gp-topbar > .gp-btn:hover,
+.gp-topbar > .gp-btn:focus-visible {
+  color: var(--gp-gold);
+  border-color: var(--gp-gold);
+}
+/* 홈 화면 제목은 픽셀 폰트로 표시 */
+.gp-card:has(.gp-grid) > h1 {
+  margin: 4px 0 14px;
+  color: var(--gp-lime);
+  font: clamp(18px, 3.8vw, 30px) var(--gp-pixel);
+  line-height: 1.6;
+  white-space: normal;
+}
+.gp-grid > button:hover {
+  transform: translateY(-2px);
+}
+
+/* ---------- 6단계(방향키 순서) 모바일 방향 버튼: 방향별 색상 ---------- */
+.gp-mobile-controls .gp-rocket-up,
+.gp-mobile-controls .gp-rocket-down,
+.gp-mobile-controls .gp-rocket-left,
+.gp-mobile-controls .gp-rocket-right {
+  width: clamp(52px, 8.5vw, 68px);
+  min-width: clamp(52px, 8.5vw, 68px);
+  height: 48px;
+  min-height: 48px;
+  padding: 3px;
+  color: #fff;
+  font-size: 23px;
+}
+.gp-mobile-controls .gp-rocket-up {
+  background: #176b91; /* 위: 파랑 */
+  border-color: #65d4ff;
+}
+.gp-mobile-controls .gp-rocket-down {
+  background: #704319; /* 아래: 주황/갈색 */
+  border-color: #ffba55;
+}
+.gp-mobile-controls .gp-rocket-left {
+  background: #4d3674; /* 왼쪽: 보라 */
+  border-color: #c29aff;
+}
+.gp-mobile-controls .gp-rocket-right {
+  background: #22583b; /* 오른쪽: 초록 */
+  border-color: #8ce5a9;
+}
+
+/* ---------- 1단계 결과: 반응속도 통계 ---------- */
+.gp-reaction-stats {
+  display: grid;
+  gap: 7px;
+  margin: 12px 0 16px;
+  text-align: left;
+}
+.gp-reaction-stats > div {
+  display: flex;
+  justify-content: space-between;
+  padding: 9px 11px;
+  border: 1px solid #46543b;
+  background: #151d14;
+  color: #d8ddc6;
+  font-size: 13px;
+}
+.gp-reaction-stats b {
+  color: var(--gp-gold);
+}
+
+/* 5단계 결과 막대 보정(위의 기본값을 덮어씀): 간격·높이 확대 */
+.gp-measures {
+  gap: 12px;
+  margin-top: 15px;
+}
+.gp-measure-track {
+  height: 24px;
+}
+.gp-measure-meta {
+  flex-wrap: wrap;
+  line-height: 1.7;
+}
+.gp-measure-fill {
+  background: #fff4c688;
+}
+/* 5단계 결과 하단의 점수 구간 범례 */
+.gp-timer-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 9px 10px;
+  border: 1px solid #46543b;
+  background: #151d14;
+  color: #cdd3bd;
+  font-size: 10px;
+  line-height: 1.6;
+}
+.gp-timer-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.gp-timer-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1px solid #0b100a;
+}
+
+/* ---------- 4단계(청기백기): 30초 남은 시간 바 ---------- */
+.gp-flag-timer {
+  display: flex;
+  height: 38px;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 15px;
+  border-bottom: 2px solid #59694a;
+  background: #171e15;
+  color: #e4e5ce;
+  font-size: 11px;
+}
+.gp-flag-time-track {
+  flex: 1;
+  min-width: 0;
+  height: 16px;
+  overflow: hidden;
+  border: 2px solid #0c110b;
+  background: #090d09;
+  box-shadow: inset 0 0 0 2px #263222;
+}
+/* 채움 폭과 색상은 GameplayPage에서 인라인 스타일로 지정합니다. */
+.gp-flag-time-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #8ce5a9;
+  transition: background-color 0.2s;
+}
+.gp-flag-timer b {
+  min-width: 52px;
+  color: var(--gp-gold);
+  font: 10px var(--gp-pixel);
+  text-align: right;
+}
+@media (max-width: 720px) {
+  .gp-topbar > .gp-btn {
+    width: 34px;
+    min-width: 34px;
+    height: 32px;
+    min-height: 32px;
+    font-size: 17px;
+  }
+  .gp-flag-timer {
+    height: 34px;
+    padding: 4px 9px;
+    gap: 8px;
+    font-size: 10px;
+  }
+  .gp-flag-timer b {
+    min-width: 46px;
+    font-size: 8px;
+  }
+}
+
+/* ---------- 홈 화면 문구 ---------- */
+.gp-card .gp-home-sub {
+  font-size: 16px;
+  color: #d5d9c6;
+  line-height: 1.9;
+}
+.gp-card .gp-home-notice {
+  max-width: 650px;
+  margin: 12px auto 20px;
+  color: #aab29a;
+  font-size: 11px;
+  line-height: 1.9;
+}
+
+/* ---------- 단계 안내(인트로) 카드 ---------- */
+.gp-intro-card {
+  width: min(760px, 100%);
+  padding: 26px;
+  border: 3px solid #718256;
+  background: #20291d;
+  box-shadow: 7px 7px 0 #080b08;
+}
+.gp-intro-card h1 {
+  margin: 15px 0 20px;
+  color: var(--gp-lime);
+  font-size: 27px;
+}
+/* "게임 규칙" / "조작법" 두 패널을 나란히 배치 */
+.gp-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 22px;
+  text-align: left;
+}
+.gp-guide-section {
+  min-width: 0;
+  padding: 16px;
+  border: 2px solid #536347;
+  background: #151e14;
+}
+.gp-guide-section h2 {
+  margin: 0 0 9px;
+  color: var(--gp-gold);
+  font-size: 15px;
+  font-weight: 900;
+}
+.gp-guide-section p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.8;
+  white-space: pre-line; /* 안내 문구의 \n 줄바꿈을 그대로 표시 */
+  word-break: keep-all;
+}
+.gp-card .gp-intro-desc {
+  color: #f1edd5;
+}
+.gp-card .gp-intro-help {
+  color: #f1edd5;
+}
+/* .gp-guide-controls {
+  border-color: #879a63;
+  background: #1a2417;
+} */
+
+/* ---------- 단계 결과 다이얼로그 / 종합 결과 ---------- */
+.gp-dialog {
+  width: min(430px, 100%);
+  text-align: center;
+}
+.gp-dialog h2 {
+  margin: 5px 0 13px;
+  color: var(--gp-gold);
+  font-size: 24px;
+}
+.gp-dialog p {
+  color: #d1d5c0;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.gp-result-card {
+  width: min(900px, 100%);
+}
+.gp-result-grid {
+  grid-template-columns: minmax(250px, 0.8fr) minmax(0, 1.4fr);
+  align-items: stretch;
+}
+.gp-result-age-col { display:flex; align-items:stretch; min-height:0; }
+/* 피지컬 나이 표시 박스 */
+.gp-age-display {
+  display:flex;
+  width:100%;
+  height:100%;
+  min-height:0;
+  box-sizing:border-box;
+  flex-direction:column;
+  justify-content:flex-start;
+  padding: clamp(14px, 2vw, 22px);
+  border: 2px solid #586c42;
+  background: #171e15;
+  text-align: center;
+}
+.gp-age-num {
+  display: inline-block;
+  margin: 0;
+  color: var(--gp-gold);
+  font: 900 40px/1.2 "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
+}
+.gp-age-summary {
+  display:flex;
+  align-items:baseline;
+  justify-content:center;
+  gap:10px;
+  margin:18px 0;
+  color:var(--gp-gold);
+  font: 900 30px/1.25 'Galmuri9', 'Galmuri', 'Noto Sans KR', sans-serif;
+}
+.gp-age-summary .gp-age-num { font: inherit; }
+.gp-result-insights {
+  display:block;
+  margin:30px 0 0;
+  text-align:left;
+}
+.gp-result-insights p { margin:0 0 18px; color:#d5d9c6; font-size:12px; line-height:1.9; }
+.gp-result-insights p b { color:var(--gp-lime); }
+.gp-age-title {
+  margin-top:4px;
+  color: var(--gp-lime);
+  font-size: 18px;
+  font-weight: 900;
+}
+.gp-result-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 16px;
+  color: #d9ddc9;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.gp-result-total b {
+  color: var(--gp-gold);
+  font: 700 16px/1.4 "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
+}
+/* 레이더 차트를 감싸는 박스 */
+.gp-chart-wrap {
+  padding: 12px;
+  border: 2px solid #59694a;
+  background: #151d14;
+}
+.gp-chart-wrap h3 {
+  margin: 0 0 6px;
+  color: var(--gp-gold);
+  font-size: 13px;
+}
+.gp-chart-wrap canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 340px;
+  image-rendering: pixelated;
+}
+.gp-feedback-box {
+  margin-top: 12px;
+  color: #ccd3bb;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+/* ---------- 3단계 방향 버튼 행 ---------- */
+.gp-direction-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(4px, 1.5vw, 8px);
+}
+.gp-direction-row .gp-btn {
+  display: flex;
+  width: clamp(52px, 8.5vw, 68px);
+  min-width: clamp(52px, 8.5vw, 68px);
+  height: 52px;
+  min-height: 52px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 3px;
+  font-size: 20px;
+  line-height: 1;
+}
+.gp-direction-row .gp-btn small {
+  color: #d8dfc7;
+  font: 700 9px var(--gp-pixel);
+}
+@media (max-width: 720px) {
+  .gp-intro-card,
+  .gp-result-card {
+    padding: 18px 12px;
+  }
+  .gp-intro-card h1 {
+    font-size: 21px;
+  }
+  .gp-guide-grid {
+    grid-template-columns: 1fr; /* 좁은 화면에서는 세로로 쌓기 */
+    gap: 9px;
+  }
+  .gp-guide-section {
+    padding: 13px;
+  }
+  .gp-guide-section p {
+    font-size: 13px;
+  }
+  .gp-card .gp-home-sub {
+    font-size: 14px;
+  }
+  .gp-grid > button b,
+  .gp-grid > .gp-stage b {
+    font-size: 9px;
+  }
+  .gp-age-display {
+    padding: 12px;
+  }
+  .gp-age-num {
+    font-size: 32px;
+  }
+}
+.gp-direction-row .gp-rocket-up,
+.gp-direction-row .gp-rocket-down,
+.gp-direction-row .gp-rocket-left,
+.gp-direction-row .gp-rocket-right {
+  height: 48px;
+  min-height: 48px;
+  font-size: 23px;
+}
+
+/* ---------- 설정 오버레이 ---------- */
+.gp-screen > .gp-settings-overlay {
+  position: absolute;
+  z-index: 30; /* 다른 오버레이보다 위에 표시 */
+  inset: 0;
+  overflow-y: auto;
+  padding: 20px;
+}
+.gp-settings-card {
+  width: min(460px, 100%);
+  margin: auto;
+  padding: 24px;
+  border-color: #82975e;
+  text-align: center;
+}
+.gp-settings-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  justify-content: flex-end; /* 닫기 버튼을 오른쪽 끝으로 (위 값을 덮어씀) */
+}
+.gp-settings-heading .gp-tag {
+  color: var(--gp-gold);
+}
+.gp-settings-close {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  font-size: 22px;
+}
+.gp-settings-card h2 {
+  margin: 10px 0 18px;
+  color: var(--gp-lime);
+}
+.gp-settings-options {
+  display: grid;
+  gap: 10px;
+}
+/* 브금/효과음 토글 버튼 */
+.gp-settings-toggle {
+  display: flex;
+  min-height: 54px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 14px;
+  border: 2px solid #4e6041;
+  background: #151d14;
+  color: var(--gp-paper);
+  font: 700 14px var(--gp-korean);
+  cursor: pointer;
+}
+.gp-settings-toggle:hover,
+.gp-settings-toggle:focus-visible {
+  border-color: var(--gp-lime);
+  outline: none;
+  background: #202b1c;
+}
+.gp-settings-toggle b {
+  min-width: 60px;
+  padding: 6px 8px;
+  border: 1px solid #58694a;
+  background: #293724;
+  color: var(--gp-lime);
+  font-size: 12px;
+  text-align: center;
+}
+/* 꺼짐 상태(aria-pressed="false")는 붉은 계열로 표시 */
+.gp-settings-toggle[aria-pressed='false'] b {
+  border-color: #654b43;
+  background: #35251f;
+  color: #ff9b80;
+}
+.gp-settings-actions {
+  margin-top: 18px;
+}
+.gp-app > .gp-brandbar:last-child {
+  display: none;
+}
+
+/* ---------- 화면 높이에 맞춰 내용 맞추기 ---------- */
+/* 스크롤바 없이 화면 높이 안에 모든 내용을 넣습니다.
+   넘치는 경우 GameView가 --gp-fit-scale 값을 계산하고, 아래 zoom이 전체를 같은 비율로 축소합니다. */
+.gp-screen {
+  display: flex;
+  flex-direction: column;
+  height: min(760px, max(1px, calc(100svh - 66px)));
+  min-height: 0;
+  overflow: hidden;
+}
+.gp-screen > * {
+  flex-shrink: 0;
+  zoom: var(--gp-fit-scale, 1);
+}
+.gp-screen > .gp-home {
+  flex: 1 0 auto;
+  min-height: 0;
+}
+.gp-screen > .gp-home > .gp-card {
+  margin: auto;
+}
+
+/* 플레이 화면에서 HUD, 안내, 조작 버튼이 들어갈 공간을 남기도록 캔버스 크기를 뷰포트 높이에서 계산합니다. */
+.gp-screen:has(> .gp-arena):not(:has(> .gp-flag-timer)) > .gp-topbar {
+  margin-bottom: 38px;
+}
+.gp-screen > .gp-arena {
+  width: min(100%, 936px, max(0px, calc((100svh - 300px) * 16 / 9)));
+  flex-shrink: 0;
+  align-self: center;
+}
+/* 4단계는 시간 바가 추가되므로 캔버스를 조금 더 작게 */
+.gp-screen:has(> .gp-flag-timer) > .gp-arena {
+  width: min(90%, 842.4px, max(0px, calc((100svh - 300px) * 1.6)));
+}
+.gp-overlay {
+  overflow: hidden;
+}
+.gp-overlay .gp-card {
+  margin: auto;
+}
+@media (max-width: 720px) {
+  .gp-screen > .gp-settings-overlay {
+    padding: 8px;
+  }
+  .gp-settings-card {
+    padding: 18px 14px;
+  }
+  .gp-settings-toggle {
+    min-height: 50px;
+    padding: 9px 11px;
+    font-size: 13px;
+  }
+  .gp-screen {
+    height: max(1px, calc(100svh - 42px));
+  }
+  .gp-screen:has(> .gp-arena):not(:has(> .gp-flag-timer)) > .gp-topbar {
+    margin-bottom: 34px;
+  }
+  .gp-screen > .gp-arena {
+    width: min(100%, max(0px, calc((100svh - 280px) * 16 / 9)));
+  }
+  .gp-screen:has(> .gp-flag-timer) > .gp-arena {
+    width: min(90%, max(0px, calc((100svh - 280px) * 1.6)));
+  }
+  .gp-instruction {
+    flex-wrap: wrap;
+    gap: 3px 12px;
+  }
+  .gp-overlay {
+    padding: 6px;
+  }
+  .gp-overlay .gp-card {
+    padding: 8px;
+  }
+  .gp-overlay .gp-card h2 {
+    margin: 2px 0;
+    font-size: 18px;
+  }
+  .gp-overlay .gp-card p {
+    margin: 2px 0;
+    font-size: 11px;
+  }
+  .gp-overlay .gp-actions {
+    gap: 4px;
+    padding: 4px;
+  }
+}
+
+/* ---------- 화면 우측 상단의 설정(⚙) 버튼 ---------- */
+.gp-screen > .gp-screen-settings {
+  position: absolute;
+  z-index: 8;
+  top: 8px;
+  right: 8px;
+  width: 40px;
+  min-width: 40px;
+  height: 38px;
+  min-height: 38px;
+  padding: 0;
+  font-size: 20px;
+}
+
+/* 설정 버튼과 겹치지 않도록 상단 바 오른쪽에 여백 확보 */
+.gp-screen > .gp-topbar {
+  padding-right: 64px;
+}
+.gp-timer-ui { position: absolute; z-index: 4; inset: 0; color: var(--gp-paper); pointer-events: none; text-shadow: 2px 2px 0 #10140f, -1px -1px 0 #10140f; }
+.gp-timer-ui strong { position: absolute; top: 16%; left: 50%; width: 100%; color: var(--gp-paper); font-size: clamp(18px, 2.4vw, 26px); font-weight: 900; line-height: 1.35; text-align: center; transform: translateX(-50%); }
+.gp-timer-ui > span { position: absolute; top: 40%; left: 50%; color: var(--gp-gold); font: 24px var(--gp-pixel); transform: translate(-50%, -50%); }
+.gp-timer-scale { position: absolute; right: 7.5%; bottom: 20%; left: 7.5%; display: flex; justify-content: space-between; color: #cdd3bd; font-size: 10px; }
+.gp-timer-scale b { position: absolute; left: 83.3333%; color: var(--gp-gold); transform: translateX(-50%); }
+.gp-timer-result { position: absolute; right: 7.5%; bottom: 8%; left: 7.5%; margin: 0; color: var(--gp-gold); font-size: clamp(17px, 2vw, 23px); font-weight: 900; line-height: 1.45; text-align: center; }
+.gp-timer-ui small { position: absolute; bottom: 2%; left: 50%; color: #b8c2a5; font-size: 10px; transform: translateX(-50%); white-space: nowrap; }
+
+@media (max-width: 720px) {
+  .gp-screen > .gp-screen-settings {
+    top: 6px;
+    right: 6px;
+    width: 34px;
+    min-width: 34px;
+    height: 32px;
+    min-height: 32px;
+    font-size: 17px;
+  }
+  .gp-screen > .gp-topbar {
+    padding-right: 50px;
+  }
+}
+/* 화면 높이가 낮을 때(가로 모드 등) 여백을 줄여 내용이 들어가도록 */
+@media (max-height: 600px) {
+  .gp-screen:has(> .gp-arena):not(:has(> .gp-flag-timer)) > .gp-topbar {
+    margin-bottom: 8px;
+  }
+  .gp-instruction {
+    min-height: 0;
+    padding: 5px 8px;
+  }
+  .gp-mobile-controls {
+    min-height: 0;
+    padding: 6px;
+    gap: 5px;
+  }
+  .gp-home {
+    padding: 12px 10px;
+  }
+  .gp-card {
+    padding: 14px 12px;
+  }
+  .gp-grid {
+    margin: 10px 0;
+  }
+  .gp-card .gp-home-sub {
+    margin-bottom: 8px;
+    line-height: 1.5;
+  }
+  .gp-card .gp-home-notice {
+    margin: 8px auto 12px;
+    line-height: 1.5;
+  }
+}
+
+/* 홈 제목 텍스트를 CSS로 교체: 원래 글자는 숨기고(font-size: 0) ::after로 같은 문구를 픽셀 폰트 크기로 표시 */
+.gp-card:has(.gp-grid) > h1 {
+  font-size: 0;
+}
+.gp-card:has(.gp-grid) > h1::after {
+  content: '게임 피지컬 테스트';
+  font-size: clamp(18px, 3.8vw, 30px);
+}
+
+/* ==========================================================================
+   공통 간격/패널 정리: 화면 전체의 밀도와 여백을 통일합니다. (앞선 규칙을 덮어쓰는 최종 값)
+   ========================================================================== */
+.gp-app {
+  --gp-space-1: 8px;
+  --gp-space-2: 12px;
+  --gp-space-3: 18px;
+  --gp-space-4: 24px;
+  --gp-space-5: 32px;
+  padding: clamp(12px, 2.5vh, 22px) max(16px, calc((100% - 1120px) / 2));
+}
+
+.gp-frame {
+  padding: 10px;
+  border-width: 3px;
+}
+
+.gp-screen {
+  border-width: 2px;
+  background-color: #182117;
+}
+
+.gp-home {
+  padding: clamp(20px, 4vh, 40px) clamp(16px, 4vw, 40px);
+}
+
+.gp-card {
+  width: min(820px, 100%);
+  padding: clamp(22px, 3.5vw, 36px);
+}
+
+/* 단계 선택 격자가 있는 홈 카드는 조금 더 넓게 */
+.gp-card:has(.gp-grid) {
+  width: min(900px, 100%);
+}
+
+.gp-card:has(.gp-grid) > h1 {
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+.gp-card .gp-home-sub {
+  margin: 0 auto;
+  line-height: 1.75;
+}
+
+.gp-card .gp-home-notice {
+  margin: 14px auto 22px;
+}
+
+.gp-grid {
+  gap: 12px;
+  margin: 24px 0 18px;
+}
+
+.gp-grid > button,
+.gp-grid > .gp-stage {
+  min-height: 76px;
+  padding: 14px 10px;
+  border-width: 2px;
+  line-height: 1.6;
+  transition:
+    transform 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.gp-grid > button b,
+.gp-grid > .gp-stage b {
+  margin-bottom: 8px;
+}
+
+.gp-grid > button:hover,
+.gp-grid > button:focus-visible,
+.gp-grid > .gp-stage:hover {
+  border-color: var(--gp-lime);
+}
+
+/* 눌렀을 때 버튼이 살짝 눌리는 느낌 */
+.gp-grid > button:active {
+  transform: translate(2px, 2px);
+}
+
+.gp-card > .gp-btn.gp-primary {
+  min-width: min(260px, 100%);
+  margin-top: 2px;
+}
+.gp-stage-complete-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+.gp-stage-complete-actions .gp-btn {
+  min-width: min(180px, 100%);
+}
+@media (max-width: 520px) {
+  .gp-stage-complete-actions {
+    flex-direction: column;
+  }
+  .gp-stage-complete-actions .gp-btn {
+    width: 100%;
+  }
+}
+
+.gp-topbar {
+  padding-inline: clamp(12px, 2vw, 22px);
+}
+
+.gp-instruction {
+  padding-inline: clamp(12px, 2vw, 22px);
+}
+
+.gp-actions,
+.gp-mobile-controls {
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.gp-result-card {
+  width: min(900px, 100%);
+}
+
+.gp-result-grid {
+  gap: clamp(16px, 3vw, 28px);
+  align-items: stretch;
+}
+
+.gp-chart-wrap {
+  padding: clamp(14px, 2vw, 22px);
+}
+
+.gp-age-display { padding: clamp(14px, 2vw, 22px); }
+
+.gp-scores {
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 0;
+}
+
+.gp-scores > * {
+  min-width: 0;
+  padding: 9px 11px;
+  line-height: 1.5;
+}
+
+.gp-guide-grid {
+  gap: 14px;
+}
+
+.gp-guide-section {
+  padding: 18px;
+}
+
+@media (max-width: 720px) {
+  .gp-app {
+    padding: 8px;
+  }
+
+  .gp-frame {
+    padding: 4px;
+  }
+
+  .gp-home {
+    padding: 16px 10px;
+  }
+
+  .gp-card,
+  .gp-intro-card,
+  .gp-result-card {
+    padding: 20px 14px;
+  }
+
+  .gp-grid {
+    gap: 8px;
+    margin: 17px 0 13px;
+  }
+
+  .gp-grid > button,
+  .gp-grid > .gp-stage {
+    min-height: 66px;
+    padding: 10px 5px;
+  }
+
+  .gp-actions,
+  .gp-mobile-controls {
+    gap: 8px;
+    padding: 9px;
+  }
+
+  .gp-guide-section {
+    padding: 13px;
+  }
+}
+
+/* 아주 좁은 화면(520px 이하): 단계 격자를 2열로, 결과 화면을 1열로 */
+@media (max-width: 520px) {
+  .gp-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .gp-card:has(.gp-grid) > h1::after {
+    font-size: clamp(16px, 5vw, 23px);
+  }
+
+  .gp-result-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .gp-scores {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.gp-age-num,
+.gp-result-total,
+.gp-result-total b {
+  font-family: 'Galmuri9', 'Galmuri', 'Noto Sans KR', sans-serif;
+}
+
+/* 종합 결과: 점수 요약과 능력 차트를 같은 높이의 두 영역으로 정렬합니다. */
+.gp-result-card {
+  width: min(900px, 100%);
+  padding: 24px;
+}
+.gp-result-card .gp-result-grid {
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.25fr);
+  gap: 18px;
+  align-items: stretch;
+}
+.gp-result-card .gp-age-display {
+  position: relative;
+  height: auto;
+  flex: 1;
+  padding: 22px;
+  border: 1px solid #6e7650;
+  background: linear-gradient(155deg, #2b3020 0%, #1a2218 45%, #161e15 100%);
+  box-shadow: inset 0 3px 0 #c2cc82;
+}
+.gp-result-card .gp-age-display::after {
+  content: '';
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  width: 4px;
+  height: 4px;
+  background: #c2cc82;
+  box-shadow: -7px 0 #697647;
+}
+.gp-result-card .gp-result-heading,
+.gp-result-card .gp-chart-wrap h3 {
+  margin: 0;
+  font: 400 13px/1.6 'Galmuri9', sans-serif;
+  color: #d9dfbd;
+  text-align: left;
+}
+.gp-result-card .gp-age-summary {
+  margin: 30px 0 16px;
+  gap: 10px;
+  white-space: nowrap;
+  font: 400 clamp(24px, 2.8vw, 32px)/1.3 'Galmuri9', sans-serif;
+  letter-spacing: -1px;
+  color: #ffe477;
+}
+.gp-result-card .gp-age-separator { font-size: 20px; color: #7f8b5b; }
+.gp-result-card .gp-age-title {
+  align-self: center;
+  margin: 0;
+  padding: 5px 12px;
+  color: #cef38a;
+  font: 400 15px/1.5 'Galmuri9', sans-serif;
+  border-top: 1px solid #52623b;
+  border-bottom: 1px solid #52623b;
+}
+.gp-result-card .gp-result-insights { margin: 28px 0 0; }
+.gp-result-card .gp-result-insights p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.85;
+  color: #c5cdb9;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.gp-result-card .gp-result-insights p + p { margin-top: 24px; }
+.gp-insight-label {
+  display: block;
+  margin-bottom: 8px;
+  color: #929e82;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+.gp-result-card .gp-play-type {
+  display: block;
+  margin-bottom: 7px;
+  font: 400 16px/1.5 'Galmuri9', sans-serif;
+  color: #e0e8cb;
+}
+.gp-result-abilities { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.gp-result-card .gp-chart-wrap {
+  flex: 1;
+  padding: 22px;
+  border: 1px solid #4c5b3e;
+  background: #151e15;
+}
+.gp-result-card .gp-chart-wrap canvas { margin-top: 12px; object-fit: contain; }
+.gp-result-card .gp-scores { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.gp-result-card .gp-result-score {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid #46553a;
+  background: #1c2519;
+  font-size: 11px;
+}
+.gp-result-card .gp-result-score b { font: 400 16px/1.4 'Galmuri9', sans-serif; color: #d7ed9d; }
+.gp-result-score-track { display: block; height: 3px; margin-top: 3px; background: #303b27; }
+.gp-result-score-track > span { display: block; height: 100%; background: #a4c26c; }
+.gp-result-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #3d4b33;
+}
+.gp-result-card .gp-result-footer .gp-home-notice { margin: 0; max-width: 420px; text-align: left; font-size: 11px; color: #8f9b81; }
+.gp-result-footer .gp-btn { flex-shrink: 0; min-width: 130px; }
+@media (max-width: 620px) {
+  .gp-result-card { padding: 14px; }
+  .gp-result-card .gp-result-grid { grid-template-columns: 1fr; }
+  .gp-result-card .gp-age-display, .gp-result-card .gp-chart-wrap { padding: 18px; }
+  .gp-result-footer { flex-direction: column; gap: 12px; }
+  .gp-result-footer .gp-btn { width: 100%; }
+}
+
+/* 공통 아트 디렉션: 어두운 올리브 패널, 픽셀 글꼴, 얇은 테두리와 선명한 조작부 */
+.gp-app .gp-btn { font-family: 'Galmuri9', 'Noto Sans KR', sans-serif; }
+.gp-app {
+  --gp-pixel: 'Galmuri9', 'Noto Sans KR', sans-serif;
+  --gp-line: #4c5b3e;
+  --gp-lime: #cef38a;
+  --gp-gold: #ffe477;
+  --gp-paper: #e4e9d5;
+  --gp-muted: #99a58a;
+  background-color: #0e140f;
+  background-image: radial-gradient(ellipse at 50% 0, #303b2460, transparent 65%), linear-gradient(#6b80500a 1px, transparent 1px), linear-gradient(90deg, #6b80500a 1px, transparent 1px);
+  background-size: auto, 24px 24px, 24px 24px;
+}
+.gp-frame {
+  padding: 6px;
+  border: 1px solid #65734c;
+  background: #242d1e;
+  box-shadow: 0 0 0 3px #10170e, 0 12px 40px #0006;
+}
+.gp-screen { border: 1px solid #38462c; background: #161e15; }
+.gp-screen::before { opacity: 0.025; }
+.gp-card:not(.gp-result-card) {
+  border: 1px solid #4f5f40;
+  background: linear-gradient(145deg, #252e1f, #192217 65%);
+  box-shadow: inset 0 3px 0 #82965b;
+}
+.gp-btn {
+  padding: 11px 18px;
+  border: 1px solid #61754b;
+  background: #25331f;
+  color: #e0e8ce;
+  box-shadow: 0 3px 0 #0b1309;
+  text-shadow: none;
+  font: 400 14px/1.5 var(--gp-pixel);
+  transition: background-color 120ms, border-color 120ms, transform 120ms;
+}
+.gp-btn:hover { background: #35472a; border-color: #bbd78b; }
+.gp-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #0b1309; }
+.gp-btn:focus-visible, .gp-settings-toggle:focus-visible { outline: 2px solid #ffe477; outline-offset: 3px; }
+.gp-btn.gp-primary { color: #283019; background: #e7d477; border: 1px solid #ffed9b; box-shadow: 0 3px 0 #756431; font-weight: 400; }
+.gp-btn.gp-primary:hover { background: #fff0a0; }
+.gp-menu-eyebrow { display: block; color: #a8b78e; font: 400 12px/1.6 var(--gp-pixel); }
+.gp-card.gp-menu-card { width: min(900px, 100%); padding: 28px; }
+.gp-card.gp-menu-card > h1 { margin: 12px 0 14px; font: 400 clamp(22px, 3.6vw, 32px)/1.5 var(--gp-pixel); color: #e5ebd3; }
+.gp-card.gp-menu-card > h1::after { content: none; }
+.gp-card.gp-menu-card .gp-home-sub { color: #a9b59a; font-size: 13px; line-height: 1.75; }
+.gp-menu-section-heading { display: flex; justify-content: space-between; gap: 12px; margin-top: 26px; color: #a7b395; font-size: 11px; text-align: left; }
+.gp-menu-section-heading small { font-family: var(--gp-pixel); color: #71845e; }
+.gp-grid.gp-stage-grid { gap: 10px; margin: 10px 0 20px; }
+.gp-stage-grid > .gp-stage-tile {
+  --tile-accent: #c2dc83;
+  display: flex; flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  min-height: 126px;
+  background: #192418;
+  border: 1px solid #46583a;
+  box-shadow: none;
+  text-align: left;
+}
+.gp-stage-grid > .gp-stage-tone-1 { --tile-accent: #e7c77d; }
+.gp-stage-grid > .gp-stage-tone-2 { --tile-accent: #9bbadd; }
+.gp-stage-grid > .gp-stage-tone-3 { --tile-accent: #b1ceec; }
+.gp-stage-grid > .gp-stage-tone-4 { --tile-accent: #c5b1dc; }
+.gp-stage-grid > .gp-stage-tone-5 { --tile-accent: #eba480; }
+.gp-stage-grid > .gp-stage-tile:hover { background: #273522; border-color: var(--tile-accent); outline: none; transform: translateY(-2px); }
+.gp-stage-grid > .gp-stage-tile:focus-visible { outline: 2px solid var(--tile-accent); outline-offset: 3px; }
+.gp-stage-tile-top, .gp-stage-tile-bottom { display: flex; width: 100%; align-items: center; justify-content: space-between; }
+.gp-stage-tile-top { color: var(--tile-accent); }
+.gp-stage-tile-top small { color: #81936b; font: 400 11px var(--gp-pixel); }
+.gp-stage-grid > .gp-stage-tile b { margin: 0; color: #e3e9d5; font: 400 15px/1.5 var(--gp-pixel); }
+.gp-stage-tile-bottom { font: 400 11px/1.5 var(--gp-korean); color: #95a688; }
+.gp-stage-tile-bottom > span:last-child { color: var(--tile-accent); font-size: 16px; }
+.gp-menu-start { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding-top: 20px; border-top: 1px solid #435336; text-align: left; }
+.gp-menu-start > span { font-size: 13px; color: #dbe5c8; }
+.gp-menu-start small { display: block; margin-top: 6px; color: #8f9f7e; font-size: 11px; }
+.gp-menu-start .gp-btn { flex-shrink: 0; }
+.gp-menu-start .gp-btn span { margin-left: 14px; }
+
+/* 안내 화면: 단계 진행 표시와 두 가지 안내 영역 */
+.gp-card.gp-intro-card { width: min(820px, 100%); padding: 28px; }
+.gp-stage-progress { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 26px; }
+.gp-stage-progress span { padding: 6px; border-top: 2px solid #39482e; color: #637354; font: 400 11px/1.4 var(--gp-pixel); }
+.gp-stage-progress .is-done { color: #a0b67d; border-color: #718a51; }
+.gp-stage-progress .is-current { color: #ffe477; border-color: #ffe477; background: #cfb65b0c; }
+.gp-intro-card .gp-tag { color: #a5b98c; font: 400 12px/1.5 var(--gp-pixel); }
+.gp-intro-card h1 { margin: 12px 0 24px; color: #e7ecd8; font: 400 28px/1.5 var(--gp-pixel); }
+.gp-guide-grid { gap: 14px; margin-bottom: 24px; }
+.gp-guide-section { padding: 20px; border: 1px solid #485a3a; background: #182215; }
+.gp-guide-section h2 { margin: 0 0 14px; color: #d9e4bf; font: 400 14px/1.5 var(--gp-pixel); }
+.gp-guide-section p { color: #aebba0; font-size: 13px; line-height: 1.9; }
+.gp-guide-controls { border-top: 2px solid #a7bd7c; }
+.gp-guide-rules { border-top: 2px solid #d0bd72; }
+
+/* 게임 HUD와 터치 조작부 */
+.gp-topbar { min-height: 60px; padding: 12px 64px 12px 18px; border-bottom: 1px solid #53663e; background: #202b1b; }
+.gp-hud { gap: 10px 18px; font-size: 12px; font-weight: 500; }
+.gp-hud > b { color: #e0e8cd; font: 400 15px/1.5 var(--gp-pixel); }
+.gp-hud > span { color: #b7c5a5; }
+.gp-hud > span:first-of-type { padding: 4px 8px; border: 1px solid #536640; background: #15200f; color: #e5d889; }
+.gp-instruction { padding: 11px 18px; gap: 10px; border-top: 1px solid #4b5a3b; border-bottom: 1px solid #35432d; background: #1a2516; color: #a7b795; font-size: 12px; }
+.gp-mobile-controls { gap: 10px; padding: 14px; background: #151f12; border-top: 0; }
+.gp-mobile-controls > span { color: #8fa37e; font-size: 12px; }
+.gp-mobile-controls .gp-btn { min-height: 44px; }
+.gp-mobile-controls .gp-btn small { font: 400 11px/1.5 var(--gp-pixel); opacity: 0.8; }
+.gp-flag-timer { background: #172212; border-bottom: 1px solid #3d4e31; font-size: 12px; }
+.gp-flag-time-track { background: #303e25; border: 1px solid #4b5b3b; }
+.gp-screen-settings { width: 36px; height: 36px; min-width: 36px; min-height: 36px; padding: 0; top: 12px; right: 12px; background: #25331f; border: 1px solid #60734a; box-shadow: none; color: #c5d4ae; }
+
+/* 단계별 기록과 설정 */
+.gp-card.gp-stage-complete { padding: 26px; width: min(740px, 100%); }
+.gp-stage-complete h2 { margin: 16px 0 24px; font: 400 38px/1.3 var(--gp-pixel); color: #ffe477; }
+.gp-stage-complete > p { margin: 0 0 24px; color: #b4c2a4; }
+.gp-reaction-stats { gap: 8px; margin: 0 0 24px; }
+.gp-reaction-stats > div { padding: 14px 16px; background: #182214; border: 1px solid #465a36; font-size: 13px; }
+.gp-reaction-stats b { color: #d5e69d; font: 400 15px/1.5 var(--gp-pixel); }
+.gp-measures { gap: 12px; margin: 0 0 22px; }
+.gp-measure { padding: 14px; background: #152010; border: 1px solid #4b5b3b; }
+.gp-measure-meta { gap: 8px; flex-wrap: wrap; color: #b7c6a5; line-height: 1.7; }
+.gp-timer-legend { padding: 12px; border-color: #465a36; background: #192315; color: #aaba99; line-height: 1.8; }
+.gp-settings-overlay { background: #080e08df; }
+.gp-card.gp-settings-card { width: min(420px, 100%); padding: 24px; }
+.gp-settings-card h2 { margin: 0 0 22px; color: #e2e9ce; font: 400 24px/1.5 var(--gp-pixel); }
+.gp-settings-close { background: #1e2a18; border-color: #4b6039; box-shadow: none; }
+.gp-settings-toggle { padding: 14px 16px; min-height: 58px; background: #182314; border: 1px solid #465b35; color: #c6d4b5; font-size: 13px; }
+.gp-settings-toggle b { padding: 4px 10px; background: #263420; border: 1px solid #50673c; font: 400 12px/1.5 var(--gp-pixel); color: #8e9d7d; }
+.gp-settings-toggle[aria-pressed='true'] b { background: #c3dc8d; border-color: #d9edb1; color: #243418; }
+.gp-settings-actions { margin-top: 20px; padding: 16px 0 0; border-top: 1px solid #405332; background: transparent; }
+
+@media (max-width: 620px) {
+  .gp-card.gp-menu-card, .gp-card.gp-intro-card, .gp-card.gp-stage-complete { padding: 18px; }
+  .gp-grid.gp-stage-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .gp-stage-grid > .gp-stage-tile { min-height: 112px; padding: 12px; }
+  .gp-stage-grid > .gp-stage-tile b { font-size: 13px; }
+  .gp-menu-start { flex-direction: column; align-items: stretch; gap: 14px; }
+  .gp-menu-start .gp-btn { width: 100%; }
+  .gp-guide-grid { grid-template-columns: 1fr; gap: 10px; }
+  .gp-guide-section { padding: 14px; }
+  .gp-stage-progress { margin-bottom: 18px; }
+  .gp-topbar { padding-left: 12px; }
+  .gp-hud { gap: 8px; font-size: 11px; }
+  .gp-instruction { padding: 10px 12px; font-size: 11px; }
+  .gp-mobile-controls { gap: 6px; padding: 10px; }
+  .gp-mobile-controls .gp-btn { padding: 8px 10px; font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gp-btn, .gp-stage-grid > .gp-stage-tile { transition: none; }
+}
+
+/* 설정/닫기 버튼의 클릭 영역과 아이콘을 분명하게 고정합니다. */
+.gp-screen > .gp-screen-settings {
+  display:grid;
+  place-items:center;
+  width:40px;
+  min-width:40px;
+  height:40px;
+  min-height:40px;
+  padding:0;
+  font:400 20px/1 'Galmuri9', sans-serif;
+  color:#d9e6c5;
+  background:#202c1b;
+  border:1px solid #718657;
+  box-shadow:0 2px 0 #0b1209;
+  line-height:1;
+}
+.gp-screen > .gp-screen-settings:hover { color:#ffe477; border-color:#ffe477; background:#2b3923; }
+.gp-settings-heading { position:absolute; top:14px; right:14px; z-index:1; }
+.gp-settings-close {
+  display:grid;
+  place-items:center;
+  width:38px;
+  min-width:38px;
+  height:38px;
+  min-height:38px;
+  padding:0 0 2px;
+  font:400 21px/1 'Galmuri9', sans-serif;
+  color:#dce6cf;
+  background:#1a2516;
+  border:1px solid #64774c;
+  box-shadow:none;
+}
+.gp-settings-close:hover { color:#ffe477; border-color:#ffe477; }
+.gp-card.gp-settings-card { position:relative; padding-top:28px; }
+.gp-settings-card h2 { text-align:center; }
+
