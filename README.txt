@@ -1,23 +1,44 @@
-게이머 피지컬 테스트
+# 게임 피지컬 테스트
 
-## 실행
+여섯 가지 미니게임으로 반응속도, 에임, 회피, 판단력, 시간 감각, 입력 속도를 재미로 확인하는 웹 게임입니다.
+
+## 바로 테스트하기
+
+[게임 실행하기](https://baan9753.github.io/game_physical_test/game_physical_test.html)
+
+링크를 열고 홈 화면에서 원하는 게임을 선택해 연습하거나 **전체 테스트 시작**을 눌러 6개 단계를 차례로 플레이하세요. 각 단계의 안내 화면에서 규칙과 조작법을 확인할 수 있습니다. 키보드 사용이 어렵다면 화면의 버튼이나 터치 조작을 이용하세요.
+
+### 게임 목록
+
+1. **돌 골렘 피하기** — 위험 신호에 반응해 돌진을 피합니다.
+2. **모기 잡기** — 마우스나 터치로 모기를 잡으며 정확도를 겨룹니다.
+3. **탄환 피하기** — 날아오는 탄환을 피하며 오래 버팁니다.
+4. **청기 백기** — 지시문을 읽고 깃발을 올리거나 내립니다.
+5. **10초 맞추기** — 목표 시간에 맞춰 입력합니다.
+6. **방향키 로켓** — 화면에 나온 방향 순서대로 입력합니다.
+
+## 테스트 의견 남기기
+
+게임 오류나 개선 의견은 [저장소 Issues](https://github.com/baan9753/game_physical_test/issues)에 남겨주세요. 어느 단계에서 발생했는지와 사용한 기기·브라우저를 함께 적어주시면 확인하기 쉽습니다.
+
+## 내 컴퓨터에서 실행하기
+
+Node.js가 설치되어 있다면 저장소를 내려받은 뒤 아래 명령어로 실행할 수 있습니다.
 
 ```bash
 npm install
 npm run dev
 ```
 
-브라우저에서 http://localhost:3000 을 엽니다.
+브라우저에서 http://localhost:3000 을 여세요. GitHub Pages 테스트 링크는 저장소의 `game_physical_test.html`을 공개해 제공하며, 최신 변경 사항이 반영되기까지 잠시 걸릴 수 있습니다.
 
-## 구조 (MVVM)
+## 프로젝트 구조
 
-- `app/game.tsx`: ViewModel. React 상태, 입력 이벤트, 화면과 게임 모델의 연결을 관리합니다.
-- `app/components/GameView.tsx`: View 라우터. 현재 모드에 해당하는 페이지를 표시합니다.
-- `app/components/game-pages/`: 홈, 단계 안내, 플레이, 단계 결과, 종합 결과 페이지를 각각 분리합니다. 공통 ViewModel 타입은 `types.ts`에 있습니다.
-- `lib/game-data.ts`: 게임 이름, 규칙, 조작 안내, 문제 데이터, 등급 정보를 보관합니다.
-- `lib/game-engine.ts`: 상태 전이, 게임 규칙, 점수 계산, HUD 텍스트를 처리합니다.
-- `lib/game-renderer.ts`: 캔버스 장면과 결과 육각형 차트를 그립니다.
-- `lib/game-sound.ts`: 배경 음악과 효과음을 관리합니다.
-- `lib/game-types.ts`: 게임 상태와 입력에 사용하는 TypeScript 타입입니다.
-- `lib/game-events.ts`: GA 이벤트 연결 지점입니다.
-- `app/globals.css`: 픽셀 아트 UI 스타일입니다.
+- `app/game.tsx`: 화면 상태와 입력, 게임 데이터 연결
+- `app/components/game-pages/`: 홈·안내·플레이·결과 화면
+- `lib/game-data.ts`: 단계 이름, 규칙, 점수 기준
+- `lib/game-engine.ts`: 게임 진행과 점수 계산
+- `lib/game-renderer.ts`: 캔버스 장면과 차트
+- `lib/game-sound.ts`: 배경음과 효과음
+- `lib/game-events.ts`: GA 이벤트 연결 지점
+- `app/globals.css`: 픽셀 아트 UI 스타일
