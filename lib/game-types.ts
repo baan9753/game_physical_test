@@ -1,7 +1,9 @@
+import type { GameMessage } from './game-copy';
+
 export type Mode = 'home' | 'intro' | 'countdown' | 'play' | 'pause' | 'complete' | 'results';
 export type Direction = 'up' | 'down' | 'left' | 'right';
 export type Orb = { x: number; y: number; vx: number; vy: number; near: boolean };
-export type Flag = { text: string; answer: number };
+export type Flag = { text: string; answer: number; forbidden?: number; forbiddenFirst?: boolean };
 export type Particle = {
   x: number;
   y: number;
@@ -73,8 +75,8 @@ export type Stage = {
   rockets: number;
   misses: number;
   length: number;
-  message: string;
-  feedback: string;
+  message: GameMessage | '';
+  feedback: GameMessage | '';
 };
 export type State = {
   mode: Mode;

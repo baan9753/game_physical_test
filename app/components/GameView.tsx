@@ -7,6 +7,7 @@ import StageIntroPage from './game-pages/StageIntroPage';
 import GameplayPage from './game-pages/GameplayPage';
 import StageCompletePage from './game-pages/StageCompletePage';
 import OverallResultsPage from './game-pages/OverallResultsPage';
+import { isGameLocale, languageOptions } from '../../lib/game-locale';
 import type { GameViewModel } from './game-pages/types';
 
 /**
@@ -14,7 +15,7 @@ import type { GameViewModel } from './game-pages/types';
  * 실제 화면 내용은 game-pages 아래의 페이지 컴포넌트가 렌더링합니다.
  */
 export default function GameView(model: GameViewModel) {
-  const { state, root, onKeyDown, onKeyUp, onBlur, onTogglePause } = model;
+  const { locale, t, onLocaleChange, state, root, onKeyDown, onKeyUp, onBlur, onTogglePause } = model;
   // 설정 창 표시 여부
   const [settingsOpen, setSettingsOpen] = useState(false);
   // 설정을 열기 전에 진행 중이었다면, 닫을 때 게임을 다시 재개해야 하므로 그 여부를 기억합니다.
@@ -29,6 +30,7 @@ export default function GameView(model: GameViewModel) {
   };
   const closeSettings = () => {
     setSettingsOpen(false);
+    root.current?.focus();
     if (resumeAfterSettings.current) {
       resumeAfterSettings.current = false;
       onTogglePause();
@@ -54,7 +56,7 @@ export default function GameView(model: GameViewModel) {
       else openSettings();
       return;
     }
-    onKeyDown(event);
+    if (!settingsOpen) onKeyDown(event);
   };
 
   // 창 높이에 콘텐츠가 넘칠 때 모든 화면 요소를 같은 비율로 축소해 스크롤을 막습니다.
@@ -88,7 +90,7 @@ export default function GameView(model: GameViewModel) {
       observer.disconnect();
       window.removeEventListener('resize', fitContent);
     };
-  }, [root, state.mode, state.stage, state.stageRun]);
+  }, [root, state.mode, state.stage, state.stageRun, locale]);
 
   // 현재 게임 상태에 맞는 페이지 컴포넌트를 선택합니다.
   const page = (() => {
@@ -115,6 +117,7 @@ export default function GameView(model: GameViewModel) {
     // 키보드 이벤트를 받기 위해 tabIndex를 주고, 모든 키 입력을 이 최상위 요소에서 처리합니다.
     <div
       className="gp-app"
+      lang={locale}
       ref={root}
       tabIndex={0}
       onKeyDown={handleKeyDown}
@@ -127,8 +130,8 @@ export default function GameView(model: GameViewModel) {
           {/* 모든 화면 우측 상단에 고정된 설정 버튼 */}
           <button
             className="gp-btn gp-screen-settings"
-            aria-label="설정 열기"
-            title="설정"
+            aria-label={t('openSettings')}
+            title={t('settings')}
             onClick={openSettings}
           >
             <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -157,7 +160,7 @@ export default function GameView(model: GameViewModel) {
                   {/* <span className="gp-tag">게임 설정</span> */}
                   <button
                     className="gp-btn gp-settings-close"
-                    aria-label="설정 닫기"
+                    aria-label={t('closeSettings')}
                     onClick={closeSettings}
                   >
                     <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square" shapeRendering="crispEdges">
@@ -165,40 +168,54 @@ export default function GameView(model: GameViewModel) {
                     </svg>
                   </button>
                 </div>
-                <h2 id="settings-title">설정</h2>
+                <h2 id="settings-title">{t('settings')}</h2>
                 {/* 사운드 토글: aria-pressed로 켜짐/꺼짐 상태를 보조기기에 전달합니다. */}
                 <div className="gp-settings-options">
+                  <label className="gp-settings-language">
+                    <span>{t('language')}</span>
+                    <select
+                      value={locale}
+                      onChange={(event) => {
+                        const next = event.currentTarget.value;
+                        if (isGameLocale(next)) onLocaleChange(next);
+                      }}
+                    >
+                      {Object.entries(languageOptions).map(([value, label]) => (
+                        <option key={value} value={value} lang={value}>{label}</option>
+                      ))}
+                    </select>
+                  </label>
                   <button
                     className="gp-settings-toggle"
                     aria-pressed={model.musicEnabled}
                     onClick={model.onToggleMusic}
                   >
-                    <span>브금</span>
-                    <b>{model.musicEnabled ? '켜짐' : '꺼짐'}</b>
+                    <span>{t('music')}</span>
+                    <b>{model.musicEnabled ? t('on') : t('off')}</b>
                   </button>
                   <button
                     className="gp-settings-toggle"
                     aria-pressed={model.sfxEnabled}
                     onClick={model.onToggleSfx}
                   >
-                    <span>효과음</span>
-                    <b>{model.sfxEnabled ? '켜짐' : '꺼짐'}</b>
+                    <span>{t('sounds')}</span>
+                    <b>{model.sfxEnabled ? t('on') : t('off')}</b>
                   </button>
                 </div>
                 <div className="gp-actions gp-settings-actions">
                   {state.practice ? (
                     <>
                       <button className="gp-btn" onClick={restartPracticeStage}>
-                        다시 연습
+                        {t('retryPractice')}
                       </button>
                       <button className="gp-btn gp-primary" onClick={returnHomeFromSettings}>
-                        연습 끝내기
+                        {t('endPractice')}
                       </button>
                     </>
                   ) : (
                     state.mode !== 'home' && (
                       <button className="gp-btn" onClick={returnHomeFromSettings}>
-                        처음 화면
+                        {t('home')}
                       </button>
                     )
                   )}

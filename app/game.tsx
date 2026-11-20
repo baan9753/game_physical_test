@@ -1,9 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { FocusEvent, KeyboardEvent } from 'react';
 import { trackGameEvent } from '../lib/game-events';
-import { dirs, flags, initial, names, scoreProfile } from '../lib/game-data';
+import { dirs, flagPrompt, initial, names, scoreProfile, visibleFlagCharacters } from '../lib/game-data';
+import { translator } from '../lib/game-copy';
+import { defaultLocale, loadLocale, saveLocale, type GameLocale } from '../lib/game-locale';
 import { clamp, hud, inputSounds, reducer } from '../lib/game-engine';
 import { drawRadar, paint } from '../lib/game-renderer';
 import { createGameSound } from '../lib/game-sound';
@@ -26,6 +28,20 @@ export default function Game() {
   // 설정 화면에서 토글하는 배경음악/효과음 켜짐 여부
   const [musicEnabled, setMusicEnabled] = useState(true);
   const [sfxEnabled, setSfxEnabled] = useState(true);
+  const [locale, setLocale] = useState<GameLocale>(defaultLocale);
+  const t = useMemo(() => translator(locale), [locale]);
+
+  useEffect(() => setLocale(loadLocale()), []);
+  useEffect(() => {
+    document.documentElement.lang = locale;
+    document.title = t('title');
+    document.querySelector('meta[name="description"]')?.setAttribute('content', t('description'));
+  }, [locale, t]);
+
+  const changeLocale = (next: GameLocale) => {
+    saveLocale(next);
+    setLocale(next);
+  };
 
   // ----- ref 모음: 렌더링과 무관하게 값을 유지해야 하는 것들 -----
   const root = useRef<HTMLDivElement>(null), // 키보드 입력을 받는 최상위 div (포커스 제어용)
@@ -81,15 +97,16 @@ export default function Game() {
 
   // 플레이/카운트다운 중에는 상태가 바뀔 때마다 캔버스에 장면을 다시 그립니다.
   useEffect(() => {
-    if (state.mode === 'play' || state.mode === 'countdown') {
+    if (state.mode === 'play' || state.mode === 'countdown' || state.mode === 'pause') {
       const c = canvas.current;
       const ctx = c?.getContext('2d');
       if (ctx && state.gameData) {
         ctx.imageSmoothingEnabled = false; // 픽셀 아트가 흐려지지 않도록 보간 끄기
-        paint(ctx, state.stage, state.gameData, state.mode === 'countdown');
+        const counting = state.mode === 'countdown' || (state.mode === 'pause' && state.gameData.readyAt < 3);
+        paint(ctx, state.stage, state.gameData, counting, locale, t);
       }
     }
-  }, [state]);
+  }, [state, locale, t]);
 
   // 단계 완료 시 stage_complete 이벤트 전송. run/stageRun 조합 키로 같은 단계의 중복 전송을 막습니다.
   useEffect(() => {
@@ -178,11 +195,12 @@ export default function Game() {
     if (state.stage === 3) {
       const elapsed = Math.max(0, d.elapsed - d.phaseAt),
         before = Math.max(0, old.elapsed - old.phaseAt);
+      const promptLength = flagPrompt(d.flag, locale, t).length;
       if (
         state.mode === 'play' &&
         d.flag === old.flag &&
-        Math.min(flags.at(d.flag)?.text.length ?? 0, Math.floor(elapsed * 24) + 1) >
-          Math.min(flags.at(old.flag)?.text.length ?? 0, Math.floor(before * 24) + 1)
+        visibleFlagCharacters(d.flag, elapsed, promptLength) >
+          visibleFlagCharacters(d.flag, before, promptLength)
       )
         play('type');
     }
@@ -196,14 +214,14 @@ export default function Game() {
     }
     // 플레이 → 완료로 넘어가는 순간 공통 완료 소리
     if (prev.mode === 'play' && state.mode === 'complete') play('complete');
-  }, [state]);
+  }, [state, locale, t]);
 
   // 종합 결과 화면이 열리면 육각형 레이더 차트를 그립니다.
   useEffect(() => {
     if (state.mode !== 'results') return;
     const context = radar.current?.getContext('2d');
-    if (context) drawRadar(context, state.scores);
-  }, [state.mode, state.scores]);
+    if (context) drawRadar(context, state.scores, t);
+  }, [state.mode, state.scores, t]);
 
   // 홈 화면에서 연습/전체 테스트 시작. 사용자 입력 시점에 오디오를 활성화합니다.
   const start = (stage: number, practice: boolean) => {
@@ -355,11 +373,11 @@ export default function Game() {
   // ----- 화면에 전달할 파생 값 계산 -----
   const d = state.gameData; // 현재 단계의 진행 데이터 (없으면 null)
   // HUD 문구 3개: [상태 요약, 안내 왼쪽, 안내 오른쪽]
-  const hudText = d ? hud(state.stage, d, state.mode === 'countdown') : ['', '', ''];
+  const hudText = d ? hud(state.stage, d, state.mode === 'countdown' || (state.mode === 'pause' && d.readyAt < 3), t) : ['', '', ''];
   // 6개 단계 점수의 합계와 평균(0~100), 평균으로 환산한 피지컬 나이/등급
   const total = state.scores.reduce<number>((sum, value) => sum + (value ?? 0), 0),
     avg = Math.round(total / 6);
-  const { ageDisplay, grade } = scoreProfile(avg);
+  const { ageDisplay, grade } = scoreProfile(avg, t);
   // 가장 잘한/못한 단계의 점수 (결과 화면의 강점·추천 표시에 사용)
   const best = Math.max(...state.scores.map((value) => value ?? 0));
   const worst = Math.min(...state.scores.map((value) => value ?? 0));
@@ -421,6 +439,9 @@ export default function Game() {
   // 화면 렌더링은 GameView에 위임합니다.
   return (
     <GameView
+      t={t}
+      locale={locale}
+      onLocaleChange={changeLocale}
       state={state}
       musicEnabled={musicEnabled}
       sfxEnabled={sfxEnabled}

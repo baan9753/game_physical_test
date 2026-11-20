@@ -1736,3 +1736,42 @@ body {
 .gp-card.gp-settings-card { position:relative; padding-top:28px; }
 .gp-settings-card h2 { text-align:center; }
 
+
+.gp-settings-language {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 58px;
+  padding: 10px 16px;
+  border: 1px solid #465b35;
+  background: #182314;
+  color: #c6d4b5;
+  font-size: 13px;
+  text-align: left;
+}
+
+.gp-settings-language select {
+  max-width: 64%;
+  padding: 6px 8px;
+  border: 1px solid #50673c;
+  color: #e2e9ce;
+  background: #263420;
+  font: inherit;
+  cursor: pointer;
+  color-scheme: dark;
+}
+
+.gp-settings-language select:focus-visible {
+  outline: 2px solid #ffe477;
+  outline-offset: 2px;
+}
+
+.gp-card.gp-settings-card {
+  max-height: 100%;
+  overflow: auto;
+}
+
+.gp-app:not([lang='ko']) :is(.gp-stage-tile, .gp-hud, .gp-settings-toggle, .gp-settings-actions, .gp-result-score) {
+  overflow-wrap: anywhere;
+}

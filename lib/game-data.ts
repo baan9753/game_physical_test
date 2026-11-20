@@ -1,3 +1,5 @@
+import { message, type Translate } from './game-copy';
+import type { GameLocale } from './game-locale';
 import type { Direction, Flag, State } from './game-types';
 
 export const names = [
@@ -8,7 +10,9 @@ export const names = [
   '10초 맞추기',
   '방향키 로켓',
 ];
-export const skills = ['반응속도', '에임 정확도', '회피 능력', '판단력', '시간 감각', '입력 속도'];
+export const stageNames = ['golem', 'mosquito', 'dodge', 'flags', 'timer', 'rocket'] as const;
+export const skillNames = ['reaction', 'aim', 'evasion', 'judgment', 'timing', 'speed'] as const;
+
 // 파리채 그림은 손잡이 끝을 포인터에 붙이고, 망이 지나가는 궤적으로 타격을 판정합니다.
 export const swatterGeometry = {
   spriteAnchorShift: { x: 2.5, y: 12 },
@@ -24,39 +28,22 @@ export function timerScoreFromError(error: number) {
   return Math.max(0, 59 - Math.floor((error - 2) * 20));
 }
 export function timerGradeFromScore(score: number) {
-  if (score === 100) return 'PERFECT';
-  if (score >= 90) return 'GREAT';
-  if (score >= 80) return 'COOL';
-  if (score >= 70) return 'GOOD';
-  if (score >= 60) return 'BAD';
-  return 'MISS';
+  if (score === 100) return 'perfect';
+  if (score >= 90) return 'great';
+  if (score >= 80) return 'cool';
+  if (score >= 70) return 'good';
+  if (score >= 60) return 'bad';
+  return 'miss';
 }
 export const guides = [
-  [
-    '돌진하는 돌 골렘을 피하세요!\n위험 표시가 나타난 뒤 3초 안에 골렘이 돌진합니다.\n기회는 총 5번이며 실패하면 기회가 사라집니다.\n100ms 이하의 반응은 예측으로 실패 처리됩니다.',
-    'D·F 키를 누르거나\n화면의 버튼을 클릭 하세요.',
-  ],
-  [
-    '20초 동안 날아다니는 모기를 잡으세요!\n포획 수와 클릭 정확도로 점수를 측정합니다.',
-    '마우스나 터치로 조준한 뒤 클릭하세요.\n파리채가 포인터를 따라옵니다.',
-  ],
-  [
-    '날아오는 탄환을 피하며 최대 40초 버티세요.\n시간이 지날수록 탄환이 많아지고 패턴이 다양해집니다.\n생존 시간으로 점수를 계산합니다.',
-    '방향키 또는 W/A/S/D로 이동하세요.\n화면의 방향 버튼을 누르고 있어도 이동합니다.',
-  ],
-  [
-    '30초 동안 화면에 나오는 지시를 따르세요.\n문장을 잘 읽고 금지된 동작은 누르지 마세요!',
-    '청기 올리기/내리기는 W·S키\n백기 올리기/내리기는 O·K 키를 누르세요.\n화면 버튼도 사용할 수 있습니다.',
-  ],
-  [
-    '타이밍에 맞춰 10초를 정확하게 누르세요.\n10초에 가까울수록 높은 점수를 얻습니다!',
-    'SPACE 키 또는 정지 버튼을 눌러 시간을 멈추세요.',
-  ],
-  [
-    '화살표 방향에 맞게 방향키를 입력하세요.\n한 줄을 모두 성공하면 로켓이 발사됩니다.\n실패해도 점수 차감은 없습니다.\n최대한 많은 로켓을 발사하세요!',
-    '키보드의 ↑·↓·←·→ 방향키를 누르세요.\n화면의 방향 버튼을 클릭해도 됩니다.',
-  ],
-];
+  ['golemRules', 'golemControls'],
+  ['mosquitoRules', 'mosquitoControls'],
+  ['dodgeRules', 'dodgeControls'],
+  ['flagRules', 'flagControls'],
+  ['timerRules', 'timerControls'],
+  ['rocketRules', 'rocketControls'],
+] as const;
+
 export const flags: Flag[] = [
   // 1. 기본 단일 동작
   { text: '청기 올려!', answer: 0 },
@@ -65,33 +52,65 @@ export const flags: Flag[] = [
   { text: '백기 내려!', answer: 3 },
 
   // 긍정 동작 뒤에 금지 동작이 오는 문장
-  { text: '청기 올리고, 청기 내리지 마!', answer: 0 },
-  { text: '청기 올리고, 백기 올리지 마!', answer: 0 },
-  { text: '청기 올리고, 백기 내리지 마!', answer: 0 },
-  { text: '청기 내리고, 청기 올리지 마!', answer: 1 },
-  { text: '청기 내리고, 백기 올리지 마!', answer: 1 },
-  { text: '청기 내리고, 백기 내리지 마!', answer: 1 },
-  { text: '백기 올리고, 청기 올리지 마!', answer: 2 },
-  { text: '백기 올리고, 청기 내리지 마!', answer: 2 },
-  { text: '백기 올리고, 백기 내리지 마!', answer: 2 },
-  { text: '백기 내리고, 청기 올리지 마!', answer: 3 },
-  { text: '백기 내리고, 청기 내리지 마!', answer: 3 },
-  { text: '백기 내리고, 백기 올리지 마!', answer: 3 },
+  { text: '청기 올리고, 청기 내리지 마!', answer: 0, forbidden: 1 },
+  { text: '청기 올리고, 백기 올리지 마!', answer: 0, forbidden: 2 },
+  { text: '청기 올리고, 백기 내리지 마!', answer: 0, forbidden: 3 },
+  { text: '청기 내리고, 청기 올리지 마!', answer: 1, forbidden: 0 },
+  { text: '청기 내리고, 백기 올리지 마!', answer: 1, forbidden: 2 },
+  { text: '청기 내리고, 백기 내리지 마!', answer: 1, forbidden: 3 },
+  { text: '백기 올리고, 청기 올리지 마!', answer: 2, forbidden: 0 },
+  { text: '백기 올리고, 청기 내리지 마!', answer: 2, forbidden: 1 },
+  { text: '백기 올리고, 백기 내리지 마!', answer: 2, forbidden: 3 },
+  { text: '백기 내리고, 청기 올리지 마!', answer: 3, forbidden: 0 },
+  { text: '백기 내리고, 청기 내리지 마!', answer: 3, forbidden: 1 },
+  { text: '백기 내리고, 백기 올리지 마!', answer: 3, forbidden: 2 },
 
   // 금지 동작 뒤에 긍정 동작이 오는 문장
-  { text: '청기 올리지 말고, 청기 내려!', answer: 1 },
-  { text: '청기 올리지 말고, 백기 올려!', answer: 2 },
-  { text: '청기 올리지 말고, 백기 내려!', answer: 3 },
-  { text: '청기 내리지 말고, 청기 올려!', answer: 0 },
-  { text: '청기 내리지 말고, 백기 올려!', answer: 2 },
-  { text: '청기 내리지 말고, 백기 내려!', answer: 3 },
-  { text: '백기 올리지 말고, 청기 올려!', answer: 0 },
-  { text: '백기 올리지 말고, 청기 내려!', answer: 1 },
-  { text: '백기 올리지 말고, 백기 내려!', answer: 3 },
-  { text: '백기 내리지 말고, 청기 올려!', answer: 0 },
-  { text: '백기 내리지 말고, 청기 내려!', answer: 1 },
-  { text: '백기 내리지 말고, 백기 올려!', answer: 2 },
+  { text: '청기 올리지 말고, 청기 내려!', answer: 1, forbidden: 0, forbiddenFirst: true },
+  { text: '청기 올리지 말고, 백기 올려!', answer: 2, forbidden: 0, forbiddenFirst: true },
+  { text: '청기 올리지 말고, 백기 내려!', answer: 3, forbidden: 0, forbiddenFirst: true },
+  { text: '청기 내리지 말고, 청기 올려!', answer: 0, forbidden: 1, forbiddenFirst: true },
+  { text: '청기 내리지 말고, 백기 올려!', answer: 2, forbidden: 1, forbiddenFirst: true },
+  { text: '청기 내리지 말고, 백기 내려!', answer: 3, forbidden: 1, forbiddenFirst: true },
+  { text: '백기 올리지 말고, 청기 올려!', answer: 0, forbidden: 2, forbiddenFirst: true },
+  { text: '백기 올리지 말고, 청기 내려!', answer: 1, forbidden: 2, forbiddenFirst: true },
+  { text: '백기 올리지 말고, 백기 내려!', answer: 3, forbidden: 2, forbiddenFirst: true },
+  { text: '백기 내리지 말고, 청기 올려!', answer: 0, forbidden: 3, forbiddenFirst: true },
+  { text: '백기 내리지 말고, 청기 내려!', answer: 1, forbidden: 3, forbiddenFirst: true },
+  { text: '백기 내리지 말고, 백기 올려!', answer: 2, forbidden: 3, forbiddenFirst: true },
 ];
+
+export const flagControls = ['blueUp', 'blueDown', 'whiteUp', 'whiteDown'] as const;
+const forbiddenActions = ['flagDontBlueUp', 'flagDontBlueDown', 'flagDontWhiteUp', 'flagDontWhiteDown'] as const;
+
+export function flagPrompt(index: number, locale: GameLocale, t: Translate) {
+  const flag = flags[index];
+  if (!flag) return '';
+  if (locale === 'ko') return flag.text;
+  const action = t(flagControls[flag.answer]);
+  if (flag.forbidden === undefined) return t('flagCommand', { action });
+  const forbidden = t(forbiddenActions[flag.forbidden]);
+  return t(flag.forbiddenFirst ? 'flagDontFirst' : 'flagDoFirst', {
+    action,
+    forbidden,
+    negative: forbidden,
+  });
+}
+
+export function visibleFlagCharacters(index: number, elapsed: number, promptLength: number) {
+  const referenceLength = flags[index]?.text.length ?? 1;
+  const progress = (Math.floor(Math.max(0, elapsed) * 24) + 1) / referenceLength;
+  return Math.min(promptLength, Math.ceil(promptLength * progress));
+}
+
+export function timingDetails(elapsed: number, score: number) {
+  return message('timingDetails', {
+    direction: message(elapsed < 10 ? 'early' : elapsed > 10 ? 'late' : 'exact'),
+    error: Math.abs(elapsed - 10).toFixed(2),
+    grade: message(timerGradeFromScore(score)),
+    score,
+  });
+}
 
 export const dirs: Direction[] = ['up', 'down', 'left', 'right'];
 export const controlDirs: Direction[] = ['up', 'left', 'down', 'right'];
@@ -108,29 +127,29 @@ export const initial: State = {
   gameData: null,
 };
 
-export function scoreProfile(average: number) {
+export function scoreProfile(average: number, t: Translate) {
   const age = Math.max(14, Math.min(60, Math.round(60 - average * 0.46)));
   const grade =
     average >= 100
-      ? '역대급 천재 괴물'
+      ? 'grade100'
       : average >= 90
-        ? '프로게이머'
+        ? 'grade90'
         : average >= 80
-          ? '마스터 플레이어'
+          ? 'grade80'
           : average >= 70
-            ? '동네 고수'
+            ? 'grade70'
             : average >= 60
-              ? '준수한 피지컬'
+              ? 'grade60'
               : average >= 50
-                ? '평범한 피지컬'
+                ? 'grade50'
                 : average >= 40
-                  ? '아쉬운 피지컬'
+                  ? 'grade40'
                   : average >= 30
-                    ? '게임은 보기만 해요'
-                    : '키보드가 고장났나요?..';
+                    ? 'grade30'
+                    : 'gradeLow';
 
   return {
-    ageDisplay: age === 60 ? '60세 이상' : `${age}세`,
-    grade,
+    ageDisplay: age === 60 ? t('ageOver') : t('age', { age }),
+    grade: t(grade),
   };
 }

@@ -1,10 +1,11 @@
+import { formatMessage, message as msg, type GameMessage, type Translate } from './game-copy';
 import {
   dirs,
   flags,
   initial,
   limits,
   swatterGeometry,
-  timerGradeFromScore,
+  timingDetails,
   timerScoreFromError,
 } from './game-data';
 import type { Action, Direction, Orb, Particle, Stage, State } from './game-types';
@@ -155,11 +156,11 @@ function stageInitial(stage: number, r: number, randoms: number[] = []): Stage {
     rockets: 0,
     misses: 0,
     length: 4,
-    message: stage === 4 ? '측정을 시작하세요' : '',
+    message: stage === 4 ? msg('timerStart') : '',
     feedback: '',
   };
 }
-function finish(state: State, d: Stage, score: number, message: string): State {
+function finish(state: State, d: Stage, score: number, message: GameMessage | ''): State {
   const scores = [...state.scores];
   scores.splice(state.stage, 1, Math.round(clamp(score, 0, 100)));
   return {
@@ -171,8 +172,8 @@ function finish(state: State, d: Stage, score: number, message: string): State {
 }
 function golemFail(
   d: Stage,
-  message: string,
-  feedback = '기회 1회를 잃고 같은 거리 구간을 다시 시도합니다.',
+  message: GameMessage | '',
+  feedback: GameMessage | '' = msg('lostChance'),
 ): Stage {
   const start = 732 - ((d.round - 1) * 400) / 9,
     budget = limits.at(d.round - 1) ?? 180,
@@ -198,14 +199,14 @@ function golemFail(
     used: false,
   };
 }
-function golemHit(d: Stage, feedback: string): Stage {
+function golemHit(d: Stage, feedback: GameMessage | ''): Stage {
   return {
     ...d,
     phase: 'hit',
     phaseAt: d.elapsed,
     impactAt: d.elapsed,
     golemResultX: 150,
-    message: '피격!',
+    message: msg('hit'),
     feedback,
     used: false,
     // 피격 직전 입력의 섬광이 남아 피격 후 안전 연출처럼 보이지 않게 초기화합니다.
@@ -263,7 +264,7 @@ export function reducer(s: State, a: Action): State {
       mode: resumePlay ? 'play' : 'countdown',
       gameData:
         resumePlay && s.stage === 4 && s.gameData && !s.gameData.active && s.gameData.trial === 0
-          ? { ...s.gameData, active: true, timerStart: s.gameData.elapsed, message: '측정 중' }
+          ? { ...s.gameData, active: true, timerStart: s.gameData.elapsed, message: msg('timerActive') }
           : s.gameData,
     };
   }
@@ -281,7 +282,7 @@ export function reducer(s: State, a: Action): State {
       const next = {
         ...d,
         readyAt,
-        ...(starting && s.stage === 4 ? { active: true, timerStart: 0, message: '측정 중' } : {}),
+        ...(starting && s.stage === 4 ? { active: true, timerStart: 0, message: msg('timerActive') } : {}),
       };
       return { ...s, mode: starting ? 'play' : 'countdown', gameData: next };
     }
@@ -350,12 +351,12 @@ export function reducer(s: State, a: Action): State {
             success: n.success + 1,
             score: (n.success + 1) * 10,
             particles: [...n.particles, ...burst(sample, 'dodge', -8, 230, 15, ['#a79672'])],
-            message: '회피 성공!',
-            feedback: `반응속도 ${Math.round(n.reactions.at(-1) ?? 0)}ms · 제한 ${budget}ms 통과`,
+            message: msg('dodged'),
+            feedback: msg('reactionPassed', { ms: Math.round(n.reactions.at(-1) ?? 0), limit: budget }),
           };
         else
           n = {
-            ...golemHit(n, `반응 입력 없음 · 제한 ${budget}ms`),
+            ...golemHit(n, msg('noReaction', { limit: budget })),
             particles: [
               ...n.particles,
               ...burst(sample, 'impact', 92, 230, 22, ['#aa9473', '#f05a51']),
@@ -363,7 +364,7 @@ export function reducer(s: State, a: Action): State {
           };
       } else if (n.phase === 'result' && n.elapsed - n.phaseAt >= 1.5) {
         if (n.lives <= 0 || (n.round === 10 && n.used))
-          return finish(s, n, n.success * 10, `성공 ${n.success} / 10 · 실패 ${n.failures}회`);
+          return finish(s, n, n.success * 10, msg('golemSummary', { success: n.success, failed: n.failures }));
         n = {
           ...n,
           round: n.used ? n.round + 1 : n.round,
@@ -407,7 +408,7 @@ export function reducer(s: State, a: Action): State {
           s,
           n,
           n.clicks ? Math.min(100, ((n.caught * n.caught) / n.clicks / 40) * 100) : 0,
-          `포획 ${n.caught}마리 · 초당 ${(n.caught / 20).toFixed(1)}마리 · 정확도 ${n.clicks ? Math.round((n.caught / n.clicks) * 100) : 0}%`,
+          msg('catchStats', { count: n.caught, rate: (n.caught / 20).toFixed(1), accuracy: n.clicks ? Math.round((n.caught / n.clicks) * 100) : 0 }),
         );
     }
     if (s.stage === 2) {
@@ -474,7 +475,7 @@ export function reducer(s: State, a: Action): State {
           s,
           n,
           (Math.min(40, elapsed) / 40) * 100,
-          `생존 ${elapsed.toFixed(1)}초 · 피한 탄환 ${n.dodged}개`,
+          msg('survivalStats', { time: elapsed.toFixed(1), count: n.dodged }),
         );
       let nearHits = 0;
       orbs = orbs.map((o) => {
@@ -492,7 +493,7 @@ export function reducer(s: State, a: Action): State {
         dodged: n.dodged + orbs.length - visible.length,
         score: Math.min(100, Math.round((elapsed / 40) * 100)),
       };
-      if (elapsed >= 40) return finish(s, n, 100, `생존 40초 · 피한 탄환 ${n.dodged}개`);
+      if (elapsed >= 40) return finish(s, n, 100, msg('survivalStats', { time: 40, count: n.dodged }));
     }
     if (s.stage === 3) {
       const blue =
@@ -527,14 +528,14 @@ export function reducer(s: State, a: Action): State {
         };
       }
       if (n.elapsed >= 30)
-        return finish(s, n, clamp(n.raw, 0, 100), `정답 ${n.correct}회 · 오답 ${n.wrong}회`);
+        return finish(s, n, clamp(n.raw, 0, 100), msg('flagStats', { correct: n.correct, wrong: n.wrong }));
     }
     if (s.stage === 5 && n.elapsed >= 30)
       return finish(
         s,
         n,
         Math.min(100, (n.rockets / 20) * 100),
-        `로켓 발사 ${n.rockets}회 · 불발 ${n.misses}회`,
+        msg('rocketStats', { count: n.rockets, misses: n.misses }),
       );
     return { ...s, gameData: n };
   }
@@ -600,8 +601,8 @@ export function reducer(s: State, a: Action): State {
         gameData: {
           ...golemFail(
             now,
-            '예측 실패!',
-            '돌진 시작 전에 입력했어요. 기회 1회를 잃고 같은 구간을 다시 시도합니다.',
+            msg('falseStart'),
+            msg('inputBeforeCharge'),
           ),
           particles: [
             ...d.particles,
@@ -623,7 +624,7 @@ export function reducer(s: State, a: Action): State {
           ...now,
           lateReactionRecorded: true,
           reactions: [...now.reactions, ms],
-          feedback: `반응속도 ${Math.round(ms)}ms · 제한 ${budget}ms · 피격`,
+          feedback: msg('reactionHit', { ms: Math.round(ms), limit: budget }),
         },
       };
     }
@@ -637,13 +638,13 @@ export function reducer(s: State, a: Action): State {
           ...(ms < 100 - 1e-7
             ? golemFail(
                 now,
-                '예측 실패!',
-                `반응속도 ${Math.round(ms)}ms · 100ms 미만 입력은 예측으로 처리됩니다.`,
+                msg('falseStart'),
+                msg('reactionEarly', { ms: Math.round(ms) }),
               )
             : {
                 ...golemHit(
                   now,
-                  `반응속도 ${Math.round(ms)}ms · 제한 ${budget}ms를 넘겨 돌진에 맞았습니다.`,
+                  msg('reactionSlow', { ms: Math.round(ms), limit: budget }),
                 ),
                 // 제한을 넘겼어도 실제 입력이 있었으므로 유효 반응 기록에 포함합니다.
                 reactions: [...now.reactions, ms],
@@ -666,7 +667,7 @@ export function reducer(s: State, a: Action): State {
         flashAt: d.elapsed,
         particles: [...d.particles, ...burst(sample, 'flash', 92, 230, 22, ['#fff2a8', '#ffe477'])],
         reactions: [...now.reactions, ms],
-        message: `${Math.round(ms)}ms 회피`,
+        message: msg('reactionDodge', { ms: Math.round(ms) }),
       },
     };
   }
@@ -684,20 +685,20 @@ export function reducer(s: State, a: Action): State {
         wrong: d.wrong + (good ? 0 : 1),
         answerAt: d.elapsed || 0.001,
         lastAction: a.value ?? -1,
-        message: good ? '정답입니다!' : '오답입니다.',
+        message: good ? msg('flagCorrect') : msg('flagWrong'),
       },
     };
   }
   if (s.stage === 4) {
     if (!d.active) {
-      if (d.trial >= 3) return finish(s, d, d.score, `3회 평균 ${d.score}점`);
+      if (d.trial >= 3) return finish(s, d, d.score, msg('timerAverage', { score: d.score }));
       return {
         ...s,
         gameData: {
           ...d,
           active: true,
           timerStart: d.elapsed + Math.max(0, a.offset ?? 0),
-          message: '측정 중',
+          message: msg('timerActive'),
         },
       };
     }
@@ -716,7 +717,7 @@ export function reducer(s: State, a: Action): State {
         timerScores: scores,
         measurements,
         score,
-        message: `${elapsed.toFixed(2)}초 · 오차 ${error.toFixed(2)}초 ${elapsed < 10 ? '빨랐어요' : '늦었어요'} · ${timerGradeFromScore(points)} (${points}점)`,
+        message: msg('timingLive', { time: elapsed.toFixed(2), details: timingDetails(elapsed, points) }),
       },
     };
   }
@@ -737,7 +738,7 @@ export function reducer(s: State, a: Action): State {
           ],
           step: 0,
           sequence: sequence(d.length),
-          message: `틀렸어요! ${d.length}개 묶음으로 다시 도전`,
+          message: msg('rocketWrong', { count: d.length }),
         },
       };
     if (d.step + 1 >= d.length) {
@@ -770,7 +771,7 @@ export function reducer(s: State, a: Action): State {
           score: Math.min(100, Math.round((rockets / 20) * 100)),
           step: 0,
           sequence: sequence(length),
-          message: '성공! 로켓 발사',
+          message: msg('rocketSuccess'),
         },
       };
     }
@@ -795,7 +796,7 @@ export function reducer(s: State, a: Action): State {
           ),
         ],
         step: d.step + 1,
-        message: `정답! ${d.step + 1} / ${d.length}`,
+        message: msg('rocketCorrect', { step: d.step + 1, count: d.length }),
       },
     };
   }
@@ -836,59 +837,62 @@ export function inputSounds(before: State, after: State): GameSoundEffect[] {
   }
   return [];
 }
-export function hud(stage: number, d: Stage, counting: boolean) {
+export function hud(stage: number, d: Stage, counting: boolean, t: Translate) {
   if (counting)
     return [
-      `시작까지 ${Math.max(1, Math.ceil(3 - d.readyAt))}초`,
-      '준비하세요',
-      '3초 뒤 시작합니다',
+      t('startsIn', { time: Math.max(1, Math.ceil(3 - d.readyAt)) }),
+      t('prepare'),
+      t('startsInThree'),
     ];
+  const status = formatMessage(t, d.message);
   if (stage === 0) {
-    const limit = limits.at(d.round - 1) ?? 180,
-      gap = Math.round(640 - ((d.round - 1) * 400) / 9);
+    const limit = limits.at(d.round - 1) ?? 180;
+    const gap = Math.round(640 - ((d.round - 1) * 400) / 9);
     return [
-      `라운드 ${d.round} / 10 · 기회 ${d.lives} / 5`,
+      t('golemRound', { round: d.round, lives: d.lives }),
       d.phase === 'wait'
-        ? `골렘 간격 ${gap}px · 제한 ${limit}ms`
+        ? t('golemGap', { gap, limit })
         : d.phase === 'warning'
-          ? `위험 표시 · 곧 돌진합니다 · ${limit}ms`
+          ? t('golemWarning', { limit })
           : d.phase === 'charge'
-            ? `돌진! ${limit}ms 안에 피하세요`
-            : d.message,
-      'D / F 또는 아래 점멸 버튼',
+            ? t('golemCharge', { limit })
+            : status,
+      t('golemHint'),
     ];
   }
   if (stage === 1)
     return [
-      `남은 시간 ${Math.max(0, 20 - d.elapsed).toFixed(1)}초`,
-      `포획 ${d.caught}마리 · 초당 ${(d.caught / Math.max(0.1, d.elapsed)).toFixed(1)}마리 · 정확도 ${d.clicks ? Math.round((d.caught / d.clicks) * 100) : 0}%`,
-      '마우스 또는 터치',
+      t('timeLeftValue', { time: Math.max(0, 20 - d.elapsed).toFixed(1) }),
+      t('catchStats', {
+        count: d.caught,
+        rate: (d.caught / Math.max(0.1, d.elapsed)).toFixed(1),
+        accuracy: d.clicks ? Math.round((d.caught / d.clicks) * 100) : 0,
+      }),
+      t('pointerHint'),
     ];
   if (stage === 2)
     return [
-      `생존 ${Math.min(40, d.elapsed).toFixed(1)} / 40초`,
-      `피한 탄환 ${d.dodged}`,
-      '방향키 또는 W A S D · 화면 버튼',
+      t('survival', { time: Math.min(40, d.elapsed).toFixed(1) }),
+      t('bulletsDodged', { count: d.dodged }),
+      t('moveHint'),
     ];
   if (stage === 3)
     return [
-      `진행 ${d.correct + d.wrong}문항`,
-      d.message || `정답 ${d.correct} · 오답 ${d.wrong} · 점수 ${d.score}점`,
-      'W 청기 올리기 · S 청기 내리기 · O 백기 올리기 · K 백기 내리기',
+      t('flagProgress', { count: d.correct + d.wrong }),
+      status || t('flagHud', { correct: d.correct, wrong: d.wrong, score: d.score }),
+      t('flagHint'),
     ];
   if (stage === 4)
     return [
-      `측정 ${Math.min(3, d.trial + 1)} / 3`,
+      t('timerProgress', { attempt: Math.min(3, d.trial + 1) }),
       d.active
-        ? d.elapsed - d.timerStart < 3
-          ? '처음 3초 타이머를 확인하세요'
-          : '10초가 되면 눌러주세요'
-        : d.message || '준비되면 측정을 시작하세요',
-      '측정 중에는 화면 단서가 없습니다',
+        ? t(d.elapsed - d.timerStart < 3 ? 'timerFirst' : 'timerPress')
+        : status || t('timerReady'),
+      t('timerHint'),
     ];
   return [
-    `남은 시간 ${Math.max(0, 30 - d.elapsed).toFixed(1)}초`,
-    `${d.message || '방향키를 순서대로 입력하세요'} · 발사 ${d.rockets} / 20`,
-    '방향키 또는 화면 방향 버튼',
+    t('seconds', { time: Math.max(0, 30 - d.elapsed).toFixed(1) }),
+    `${status || t('rocketOrder')} · ${t('launchCount', { count: d.rockets })} / 20`,
+    t('rocketHint'),
   ];
 }

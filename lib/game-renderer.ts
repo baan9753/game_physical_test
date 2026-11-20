@@ -1,4 +1,6 @@
-import { flags, glyph, limits, skills, swatterGeometry } from './game-data';
+import { flagPrompt, glyph, limits, skillNames, swatterGeometry, visibleFlagCharacters } from './game-data';
+import { formatMessage, type Translate } from './game-copy';
+import type { GameLocale } from './game-locale';
 import type { Direction, Stage } from './game-types';
 import { clamp } from './game-engine';
 
@@ -23,7 +25,7 @@ function swatAmount(progress: number) {
   return 1 - back;
 }
 
-export function paint(ctx: CanvasRenderingContext2D, stage: number, d: Stage, counting: boolean) {
+export function paint(ctx: CanvasRenderingContext2D, stage: number, d: Stage, counting: boolean, locale: GameLocale, t: Translate) {
   const time = d.elapsed;
   function pixelText(
     value: string | number,
@@ -32,6 +34,7 @@ export function paint(ctx: CanvasRenderingContext2D, stage: number, d: Stage, co
     size: number,
     color: string,
     align: CanvasTextAlign = 'left',
+    maxWidth?: number,
   ) {
     ctx.save();
     ctx.font = `700 ${size}px "Noto Sans KR", "Apple SD Gothic Neo", sans-serif`;
@@ -39,7 +42,8 @@ export function paint(ctx: CanvasRenderingContext2D, stage: number, d: Stage, co
     ctx.textAlign = align;
     ctx.textBaseline = 'middle';
     ctx.fillStyle = color;
-    ctx.fillText(String(value), x, y);
+    if (maxWidth) ctx.fillText(String(value), x, y, maxWidth);
+    else ctx.fillText(String(value), x, y);
     ctx.restore();
   }
   function box(x: number, y: number, w: number, h: number, c: string) {
@@ -375,7 +379,7 @@ export function paint(ctx: CanvasRenderingContext2D, stage: number, d: Stage, co
     }
     box(54, 303, 86, 54, '#222c32');
     box(58, 308, 78, 43, '#496047');
-    pixelText('발사대', 97, 329, 11, '#d8d4b2', 'center');
+    pixelText(t('launchPad'), 97, 329, 11, '#d8d4b2', 'center', 150);
   }
   function drawRocketLauncher() {
     box(355, 302, 90, 56, '#584638');
@@ -401,7 +405,7 @@ export function paint(ctx: CanvasRenderingContext2D, stage: number, d: Stage, co
   else drawRocketBg();
   if (counting) {
     box(0, 0, 800, 450, '#10140fb8');
-    pixelText('준비하세요', 400, 168, 22, '#f2edda', 'center');
+    pixelText(t('prepare'), 400, 168, 22, '#f2edda', 'center');
     pixelText(String(Math.max(1, Math.ceil(3 - d.readyAt))), 400, 238, 60, '#ffe477', 'center');
     ctx.restore();
     return;
@@ -452,7 +456,7 @@ export function paint(ctx: CanvasRenderingContext2D, stage: number, d: Stage, co
         const a = (i * Math.PI) / 8;
         box(92 + Math.cos(a) * 30 - 3, heroY + Math.sin(a) * 30 - 3, 6, 6, '#8ce5a9');
       }
-      pixelText('안전!', 92, heroY - 43, 14, '#8ce5a9', 'center');
+      pixelText(t('safe'), 92, heroY - 43, 14, '#8ce5a9', 'center');
     }
     drawGolem(
       x,
@@ -482,8 +486,8 @@ export function paint(ctx: CanvasRenderingContext2D, stage: number, d: Stage, co
     }
     if (d.phase === 'result') {
       box(0, 0, 800, 450, '#11140f66');
-      pixelText(d.message, 400, 180, 24, d.used ? '#8ce5a9' : '#f05a51', 'center');
-      pixelText(d.feedback, 400, 224, 15, '#f2edda', 'center');
+      pixelText(formatMessage(t, d.message), 400, 180, 24, d.used ? '#8ce5a9' : '#f05a51', 'center', 740);
+      pixelText(formatMessage(t, d.feedback), 400, 224, 15, '#f2edda', 'center', 740);
     }
   }
   if (stage === 1) {
@@ -534,15 +538,15 @@ export function paint(ctx: CanvasRenderingContext2D, stage: number, d: Stage, co
       box(-22, 3, 39, 4, '#d9c58d');
       ctx.restore();
     }
-    pixelText(`포획 ${d.caught}`, 30, 33, 16, '#f2edda');
-    pixelText(`초당 ${(d.caught / Math.max(0.1, time)).toFixed(1)}마리`, 190, 33, 14, '#8ce5a9');
-    pixelText(`${Math.max(0, 20 - time).toFixed(1)}초`, 770, 33, 16, '#ffe477', 'right');
+    pixelText(t('caught', { count: d.caught }), 30, 33, 16, '#f2edda');
+    pixelText(t('caughtRate', { rate: (d.caught / Math.max(0.1, time)).toFixed(1) }), 190, 33, 14, '#8ce5a9');
+    pixelText(t('seconds', { time: Math.max(0, 20 - time).toFixed(1) }), 770, 33, 16, '#ffe477', 'right');
   }
   if (stage === 2) {
     for (const o of d.orbs) drawDodgeOrb(o.x, o.y);
     drawDodgePlayer(d.x, d.y);
-    pixelText(`${Math.max(0, 40 - time).toFixed(1)}초`, 30, 32, 17, '#ffe477');
-    pixelText(`피한 탄환 ${d.dodged}`, 770, 32, 15, '#f2edda', 'right');
+    pixelText(t('seconds', { time: Math.max(0, 40 - time).toFixed(1) }), 30, 32, 17, '#ffe477');
+    pixelText(t('bulletsDodged', { count: d.dodged }), 770, 32, 15, '#f2edda', 'right');
   }
   if (stage === 3) {
     box(160, 135, 195, 155, '#243526');
@@ -551,18 +555,22 @@ export function paint(ctx: CanvasRenderingContext2D, stage: number, d: Stage, co
     box(460, 290, 165, 9, '#82734d');
     drawFlagAt(220, 247, d.blueAngle, '#3e9bff');
     drawFlagAt(505, 247, d.whiteAngle, '#f4eed6');
-    pixelText('청기', 257, 322, 19, '#f2edda', 'center');
-    pixelText('백기', 542, 322, 19, '#f2edda', 'center');
-    const prompt = flags.at(d.flag)?.text ?? '',
-      shown = Math.min(prompt.length, Math.floor(Math.max(0, d.elapsed - d.phaseAt) * 24) + 1);
-    pixelText(prompt.slice(0, shown), 400, 89, 28, '#ffe477', 'center');
+    pixelText(t('blue'), 257, 322, 19, '#f2edda', 'center');
+    pixelText(t('white'), 542, 322, 19, '#f2edda', 'center');
+    const prompt = flagPrompt(d.flag, locale, t);
+    const shown = visibleFlagCharacters(d.flag, d.elapsed - d.phaseAt, prompt.length);
+    ctx.save();
+    ctx.font = '700 28px "Noto Sans KR", sans-serif';
+    const promptSize = Math.min(28, (28 * 740) / Math.max(1, ctx.measureText(prompt).width));
+    ctx.restore();
+    pixelText(prompt.slice(0, shown), 400, 89, promptSize, '#ffe477', 'center', 740);
     if (d.answerAt)
       pixelText(
-        d.message,
+        formatMessage(t, d.message),
         400,
         365,
         18,
-        d.message.startsWith('정답') ? '#8ce5a9' : '#f05a51',
+        d.message && d.message.key === 'flagCorrect' ? '#8ce5a9' : '#f05a51',
         'center',
       );
   }
@@ -623,11 +631,11 @@ export function paint(ctx: CanvasRenderingContext2D, stage: number, d: Stage, co
     }
     const remaining = Math.max(0, 30 - d.elapsed),
       ratio = clamp(remaining / 30, 0, 1);
-    pixelText(`발사 ${d.rockets}`, 34, 30, 16, '#ffd34e');
+    pixelText(t('launchCount', { count: d.rockets }), 34, 30, 16, '#ffd34e');
     box(125, 19, 550, 20, '#101610');
     box(129, 23, 542, 12, '#293327');
     box(129, 23, Math.round(542 * ratio), 12, ratio < 0.25 ? '#ef6555' : '#c8f36a');
-    pixelText(`${remaining.toFixed(1)}초`, 766, 30, 14, '#f2edda', 'right');
+    pixelText(t('seconds', { time: remaining.toFixed(1) }), 766, 30, 14, '#f2edda', 'right');
     const gap = Math.min(66, 680 / d.length),
       left = 400 - (gap * (d.length - 1)) / 2;
     d.sequence.forEach((direction, i) => {
@@ -662,7 +670,7 @@ export function paint(ctx: CanvasRenderingContext2D, stage: number, d: Stage, co
       );
       if (recent) pixelText('✓', x, 62, 12, '#8ce5a9', 'center');
     });
-    pixelText(`방향키 ${d.length}개 묶음 · 틀리면 새 묶음`, 400, 160, 13, '#f2edda', 'center');
+    pixelText(t('rocketLength', { count: d.length }), 400, 160, 13, '#f2edda', 'center');
     if (
       (d.rocketKind === 'success' || d.rocketKind === 'fail') &&
       d.rocketAt >= 0 &&
@@ -673,7 +681,7 @@ export function paint(ctx: CanvasRenderingContext2D, stage: number, d: Stage, co
       box(215, 185, 370, 65, success ? '#8ce5a933' : '#f05a5133');
       box(215, 185, 370, 4, success ? '#8ce5a9' : '#ff766a');
       pixelText(
-        success ? '발사 성공!' : '다시 입력하세요!',
+        success ? t('rocketLaunched') : t('rocketRetry'),
         400,
         218,
         success ? 21 : 18,
@@ -692,7 +700,7 @@ export function paint(ctx: CanvasRenderingContext2D, stage: number, d: Stage, co
   ctx.restore();
 }
 
-export function drawRadar(ctx: CanvasRenderingContext2D, scores: (number | null)[]) {
+export function drawRadar(ctx: CanvasRenderingContext2D, scores: (number | null)[], t: Translate) {
   const width = 600;
   const height = 410;
   const centerX = 300;
@@ -706,7 +714,7 @@ export function drawRadar(ctx: CanvasRenderingContext2D, scores: (number | null)
 
   for (let ring = 1; ring <= 4; ring++) {
     ctx.beginPath();
-    skills.forEach((_, index) => {
+    skillNames.forEach((_, index) => {
       const x = centerX + Math.cos(angle(index)) * radius * (ring / 4);
       const y = centerY + Math.sin(angle(index)) * radius * (ring / 4);
       if (index) ctx.lineTo(x, y);
@@ -716,7 +724,7 @@ export function drawRadar(ctx: CanvasRenderingContext2D, scores: (number | null)
     ctx.stroke();
   }
 
-  skills.forEach((_, index) => {
+  skillNames.forEach((_, index) => {
     ctx.beginPath();
     ctx.moveTo(centerX, centerY);
     ctx.lineTo(
@@ -727,7 +735,7 @@ export function drawRadar(ctx: CanvasRenderingContext2D, scores: (number | null)
   });
 
   ctx.beginPath();
-  skills.forEach((_, index) => {
+  skillNames.forEach((_, index) => {
     const value = (scores.at(index) ?? 0) / 100;
     const x = centerX + Math.cos(angle(index)) * radius * value;
     const y = centerY + Math.sin(angle(index)) * radius * value;
@@ -741,7 +749,7 @@ export function drawRadar(ctx: CanvasRenderingContext2D, scores: (number | null)
   ctx.lineWidth = 4;
   ctx.stroke();
 
-  skills.forEach((skill, index) => {
+  skillNames.forEach((skill, index) => {
     const value = scores.at(index) ?? 0;
     const x = centerX + (Math.cos(angle(index)) * radius * value) / 100;
     const y = centerY + (Math.sin(angle(index)) * radius * value) / 100;
@@ -752,9 +760,10 @@ export function drawRadar(ctx: CanvasRenderingContext2D, scores: (number | null)
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(
-      `${skill} ${value}`,
+      `${t(skill)} ${value}`,
       centerX + Math.cos(angle(index)) * (radius + 45),
       centerY + Math.sin(angle(index)) * (radius + 37),
+      220,
     );
   });
 }

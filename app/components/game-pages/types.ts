@@ -1,3 +1,5 @@
+import type { Translate } from '../../../lib/game-copy';
+import type { GameLocale } from '../../../lib/game-locale';
 import type { FocusEvent, KeyboardEvent, RefObject } from 'react';
 import type { Direction, Stage, State } from '../../../lib/game-types';
 
@@ -7,6 +9,9 @@ import type { Direction, Stage, State } from '../../../lib/game-types';
  */
 export type GameViewModel = {
   // ----- 데이터 -----
+  t: Translate;
+  locale: GameLocale;
+  onLocaleChange: (locale: GameLocale) => void;
   state: State; // 게임 전체 상태 (모드, 단계, 점수 등)
   musicEnabled: boolean; // 배경음악 켜짐 여부
   sfxEnabled: boolean; // 효과음 켜짐 여부
@@ -44,12 +49,13 @@ export type GameViewModel = {
 // ----- 페이지별로 필요한 항목만 골라 쓰는 하위 타입 -----
 
 /** 홈 화면: 시작 콜백만 필요 */
-export type HomePageModel = Pick<GameViewModel, 'onStart'>;
+export type HomePageModel = Pick<GameViewModel, 't' | 'onStart'>;
 /** 단계 안내 화면: 현재 단계 정보와 시작 콜백 */
-export type StageIntroPageModel = Pick<GameViewModel, 'state' | 'onBeginStage'>;
+export type StageIntroPageModel = Pick<GameViewModel, 't' | 'state' | 'onBeginStage'>;
 /** 플레이 화면: HUD, 캔버스, 각종 조작 콜백 */
 export type GameplayPageModel = Pick<
   GameViewModel,
+  | 't'
   | 'state'
   | 'd'
   | 'hudText'
@@ -65,10 +71,10 @@ export type GameplayPageModel = Pick<
 /** 단계 결과 화면: 단계 데이터와 다음 이동 콜백 */
 export type StageCompletePageModel = Pick<
   GameViewModel,
-  'state' | 'd' | 'onNext' | 'onBeginStage'
+  't' | 'state' | 'd' | 'onNext' | 'onBeginStage'
 >;
 /** 종합 결과 화면: 점수 요약, 차트 캔버스, 다시 도전 콜백 */
 export type OverallResultsPageModel = Pick<
   GameViewModel,
-  'state' | 'radar' | 'ageDisplay' | 'grade' | 'avg' | 'total' | 'best' | 'worst' | 'onGoHome'
+  't' | 'state' | 'radar' | 'ageDisplay' | 'grade' | 'avg' | 'total' | 'best' | 'worst' | 'onGoHome'
 >;
